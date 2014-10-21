@@ -15,6 +15,7 @@ working implementation in DMXSerial2, so it *should* work.
 
 An example usage is below:
 
+```
 #define DMX_REDE 30
 struct RDMINIT rdmData {
   "TeensyDMX v0.1",
@@ -27,3 +28,4 @@ struct RDMINIT rdmData {
   0   // Definition of additional commands
 };
 TeensyDmx Dmx(Serial2, &rdmData, DMX_REDE);
+```
