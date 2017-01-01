@@ -3,7 +3,7 @@ TeensyDmx
 
 DMX Transmit and Receive for Teensy 3.1 with RDM support.
 
-This is the combination of DMXSerial2, DmxRecieve and DmxSimple but
+This is the combination of DMXSerial2, DmxReceive and DmxSimple but
 converted to use the UART for Tx rather than the bit-banging method
 utilised by DmxSimple.
 
