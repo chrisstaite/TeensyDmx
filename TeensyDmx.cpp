@@ -100,7 +100,13 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin)
     pinMode(redePin, OUTPUT);
     *m_redePin = 0;
 
-    uartInstances[1] = this;
+    if (&m_uart == &Serial1) {
+        uartInstances[0] = this;
+    } else if (&m_uart == &Serial2) {
+        uartInstances[1] = this;
+    } else if (&m_uart == &Serial3) {
+        uartInstances[2] = this;
+    }
 }
 
 const volatile uint8_t* TeensyDmx::getBuffer() const
