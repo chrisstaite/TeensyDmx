@@ -67,7 +67,7 @@ class TeensyDmx
         
         enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV };
         enum { DMX_BUFFER_SIZE = 512 }; // 512
-    
+
         void startTransmit();
         void stopTransmit();
         void startReceive();
@@ -96,7 +96,7 @@ class TeensyDmx
         bool m_identifyMode;
         struct RDMINIT *m_rdm;
         char m_deviceLabel[32];
-    
+
         friend void UART0TxStatus(void);
         friend void UART1TxStatus(void);
         friend void UART2TxStatus(void);
