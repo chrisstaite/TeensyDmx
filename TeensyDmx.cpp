@@ -20,7 +20,7 @@
 typedef byte DEVICEID[6];
 
 // It was an easy job to register a manufacturer id to myself as explained
-// on http://tsp.plasa.org/tsp/working_groups/CP/mfctrIDs.php. 
+// on http://tsp.plasa.org/tsp/working_groups/CP/mfctrIDs.php.
 // The ID below is designated as a prototyping ID.
 DEVICEID _devID = { 0x7f, 0xf0, 0x20, 0x12, 0x00, 0x00 };
 
@@ -46,7 +46,7 @@ struct RDMDATA {
   byte     _TransNo;     // transaction number, not checked
   byte     ResponseType;    // ResponseType
   byte     _unknown;     // I don't know, ignore this
-  uint16_t SubDev;      // sub device number (root = 0) 
+  uint16_t SubDev;      // sub device number (root = 0)
   byte     CmdClass;     // command class
   uint16_t Parameter;	   // parameter ID
   byte     DataLength;   // parameter data length in bytes
@@ -58,7 +58,7 @@ struct DISCOVERYMSG {
   byte headerFE[7];
   byte headerAA;
   byte maskedDevID[12];
-  byte checksum[4];  
+  byte checksum[4];
 }; // struct DISCOVERYMSG
 
 // The DEVICEINFO structure (length = 19) has to be responsed for E120_DEVICE_INFO
@@ -99,8 +99,14 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin)
 {
     pinMode(redePin, OUTPUT);
     *m_redePin = 0;
-    
-    uartInstances[1] = this;
+
+    if (&m_uart == &Serial1) {
+        uartInstances[0] = this;
+    } else if (&m_uart == &Serial2) {
+        uartInstances[1] = this;
+    } else if (&m_uart == &Serial3) {
+        uartInstances[2] = this;
+    }
 }
 
 const volatile uint8_t* TeensyDmx::getBuffer() const
@@ -118,9 +124,9 @@ void TeensyDmx::setMode(TeensyDmx::Mode mode) {
             stopTransmit();
             break;
     }
-    
+
     m_mode = mode;
-    
+
     switch (m_mode)
     {
         case DMX_IN:
@@ -143,7 +149,7 @@ void TeensyDmx::setChannels(const uint16_t startAddress, const uint8_t* values, 
     } else {
         correctedLength = length;
     }
-    
+
     memcpy((void*)(m_activeBuffer + startAddress), values, correctedLength);
     if (startAddress + correctedLength != 512) {
         memset((void*)(m_activeBuffer + startAddress + length), 0, 512 - correctedLength);
@@ -213,7 +219,7 @@ void UART0RxError(void)
     // byte that was received.
     if (UART0_S1 & UART_S1_FE)
         (void) UART0_D;
-    
+
     uartInstances[0]->completeFrame();
 }
 
@@ -228,7 +234,7 @@ void UART1RxError(void)
     // byte that was received.
     if (UART1_S1 & UART_S1_FE)
         (void) UART1_D;
-    
+
     uartInstances[1]->completeFrame();
 }
 
@@ -243,16 +249,16 @@ void UART2RxError(void)
     // byte that was received.
     if (UART2_S1 & UART_S1_FE)
         (void) UART2_D;
-    
+
     uartInstances[2]->completeFrame();
 }
 
 void TeensyDmx::startTransmit()
 {
     *m_redePin = 1;
-    
+
     m_dmxBufferIndex = 0;
-    
+
     if (&m_uart == &Serial1) {
         // Change interrupt vector to mine to monitor TX complete
         attachInterruptVector(IRQ_UART0_STATUS, UART0TxStatus);
@@ -266,18 +272,18 @@ void TeensyDmx::startTransmit()
         attachInterruptVector(IRQ_UART2_STATUS, UART2TxStatus);
         attachInterruptVector(IRQ_UART2_ERROR, UART2RxError);
     }
-    
+
     // Send BREAK
     m_state = State::BREAK;
     m_uart.begin(BREAKSPEED, BREAKFORMAT);
     m_uart.write(0);
-    
+
 }
 
 void TeensyDmx::stopTransmit()
 {
     m_uart.end();
-    
+
     if (&m_uart == &Serial1) {
         attachInterruptVector(IRQ_UART0_STATUS, uart0_status_isr);
         attachInterruptVector(IRQ_UART0_ERROR, uart0_error_isr);
@@ -329,7 +335,7 @@ void TeensyDmx::processRDM()
 {
     struct RDMDATA* rdm = (struct RDMDATA*)(m_activeBuffer);
     unsigned long timingStart = micros();
-    
+
     bool isForMe = !DeviceIDCmp(rdm->DestID, _devID);
     if (!isForMe
             && DeviceIDCmp(rdm->DestID, _devIDAll)
@@ -337,11 +343,11 @@ void TeensyDmx::processRDM()
         // This packet is not for me...
         return;
     }
-    
+
     bool handled = false;
     bool shouldRespond = isForMe;
     uint16_t nackReason = E120_NR_UNKNOWN_PID;
-    
+
     switch (rdm->CmdClass) {
         case E120_DISCOVERY_COMMAND:
             shouldRespond = false;
@@ -362,7 +368,7 @@ void TeensyDmx::processRDM()
                     for (byte i = 0; i < 7; i++) {
                         disc->headerFE[i] = 0xFE;
                     }
-                    disc->headerAA = 0xAA;  
+                    disc->headerAA = 0xAA;
                     for (byte i = 0; i < 6; i++) {
                         disc->maskedDevID[i+i]   = _devID[i] | 0xAA;
                         disc->maskedDevID[i+i+1] = _devID[i] | 0x55;
@@ -484,7 +490,7 @@ void TeensyDmx::processRDM()
                     // No sub-devices supported
                     nackReason = E120_NR_SUB_DEVICE_OUT_OF_RANGE;
                 } else {
-                    // return all device info data 
+                    // return all device info data
                     DEVICEINFO *devInfo = (DEVICEINFO *)(rdm->Data); // The data has to be responsed in the Data buffer.
 
                     devInfo->protocolMajor = 1;
@@ -587,7 +593,7 @@ void TeensyDmx::processRDM()
         default:
             break;
     }
-    
+
     if (shouldRespond) {
         // TIMING: don't send too fast, min: 176 microseconds
         timingStart = micros() - timingStart;
@@ -603,10 +609,10 @@ void TeensyDmx::respondMessage(bool isHandled, uint16_t nackReason)
     int bufferLen;
     uint16_t i;
     uint16_t checkSum = 0;
-    
+
     struct RDMDATA* rdm = (struct RDMDATA*)(m_activeBuffer);
 
-    // no need to set these data fields: 
+    // no need to set these data fields:
     // StartCode, SubStartCode
     if (isHandled) {
         rdm->ResponseType = E120_RESPONSE_TYPE_ACK; // 0x00
@@ -617,7 +623,7 @@ void TeensyDmx::respondMessage(bool isHandled, uint16_t nackReason)
         rdm->Data[1] = nackReason & 0xFF;
     }
     rdm->Length = rdm->DataLength + 24; // total packet length
-  
+
     // swap SrcID into DestID for sending back.
     DeviceIDCpy(rdm->DestID, rdm->SourceID);
     DeviceIDCpy(rdm->SourceID, _devID);
@@ -635,7 +641,7 @@ void TeensyDmx::respondMessage(bool isHandled, uint16_t nackReason)
     stopReceive();
     *m_redePin = 1;
     m_dmxBufferIndex = 0;
-    
+
     m_uart.begin(RDM_BREAKSPEED, BREAKFORMAT);
     m_uart.write(0);
     m_uart.flush();
@@ -651,7 +657,7 @@ void TeensyDmx::respondMessage(bool isHandled, uint16_t nackReason)
     m_uart.flush();
     m_uart.write(checkSum & 0xff);
     m_uart.flush();
-    
+
     // Restart receive
     startReceive();
 }
@@ -659,7 +665,7 @@ void TeensyDmx::respondMessage(bool isHandled, uint16_t nackReason)
 void TeensyDmx::startReceive()
 {
     *m_redePin = 0;
-    
+
     // UART Initialisation
     m_uart.begin(250000);
 
@@ -730,7 +736,7 @@ void TeensyDmx::stopReceive()
 void TeensyDmx::readBytes()
 {
     __disable_irq();  // Prevents conflicts with the error ISR
-    
+
     int available = m_uart.available();
     while (available--) {
         switch (m_state) {
@@ -750,7 +756,7 @@ void TeensyDmx::readBytes()
             case State::RDM_RECV:
             case State::DMX_RECV:
                 m_activeBuffer[++m_dmxBufferIndex] = m_uart.read();
-    
+
                 if (m_dmxBufferIndex == DMX_BUFFER_SIZE) {
                     if (m_state == State::DMX_RECV) {
                         m_state = State::DMX_COMPLETE;
