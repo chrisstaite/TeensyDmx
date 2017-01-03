@@ -1,6 +1,6 @@
-/* TeensyDmx - DMX Sender/Receiver with RDM for Teensy 3.1
+/* TeensyDmx - DMX Sender/Receiver with RDM for Teensy 3.2
    Copyright (c) 2017 Peter Newman, Dan Large, http://daniellarge.co.uk
-   Copyright (c) 2014 Chris Staite
+   Copyright (c) 2017 Chris Staite
    Copyright (c) 2014 Jim Paris
    Copyright (c) 2014 Ward
    Copyright (c) 2008-2009 Peter Knight, Tinker.it! All rights reserved.
@@ -36,9 +36,9 @@
 
 struct RDMINIT {
     const char *softwareLabel;
-    char *manufacturerLabel;
+    const char *manufacturerLabel;
     const uint16_t deviceModelId;
-    char  *deviceModel;
+    const char  *deviceModel;
     uint16_t footprint;
     uint16_t startAddress;
     const uint16_t  additionalCommandsLength;
@@ -50,17 +50,38 @@ class TeensyDmx
     public:
         enum Mode { DMX_OFF, DMX_IN, DMX_OUT };
         TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin);
+        TeensyDmx(HardwareSerial& uart, uint8_t redePin);
         void setMode(TeensyDmx::Mode mode);
         void loop();
 
-        /* Returns true if a new frame has been received since the
-           last call to this function. */
-	    bool newFrame(void);
-	
-        // Use for transmit
-        void setChannels(const uint16_t startAddress, const uint8_t* values, const uint16_t length);
+        // Returns true if a new frame has been received since the this was last called
+	    bool newFrame();
         // Use for receive
         const volatile uint8_t* getBuffer() const;
+        // Returns true if RDM has changed since this was last called
+	    bool rdmChanged();
+	    // Returns true if the device should be in identify mode
+	    bool isIdentify() const;
+	    // Returns the user-set label of the device
+	    const char* getLabel() const;
+	    
+	    // Use for transmit with addresses from 0-511
+	    // Will keep all other values as they were previously
+	    void setChannel(const uint16_t address, const uint8_t value);
+	    // Use for transmit with addresses from 1-512
+	    // Will keep all other values as they were previously
+	    void setDmxChannel(const uint16_t address, const uint8_t value) {
+	        setChannel(address - 1, value);
+	    }
+	
+        // Use for transmit with channels from 0-511
+        // Will set all other channels to 0
+        void setChannels(const uint16_t startAddress, const uint8_t* values, const uint16_t length);
+        // Use for transmit with channels from 1-512
+        // Will set all other channels to 0
+        void setDmxChannels(const uint16_t startAddress, const uint8_t* values, const uint16_t length) {
+            setChannels(startAddress - 1, values, length);
+        }
 
     private:
         TeensyDmx(const TeensyDmx&);
@@ -90,6 +111,7 @@ class TeensyDmx
         volatile uint16_t m_dmxBufferIndex;
         volatile unsigned int m_frameCount;
         volatile bool m_newFrame;
+        volatile bool m_rdmChange;
         Mode m_mode;
         State m_state;
         volatile uint8_t* m_redePin;

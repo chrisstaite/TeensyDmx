@@ -1,4 +1,3 @@
-
 #include "teensydmx.h"
 #include "rdm.h"
 
@@ -82,20 +81,21 @@ static TeensyDmx *uartInstances[3] = {0};
 
 TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin) :
     m_uart(uart),
-    m_dmxBuffer1({0}),
-    m_dmxBuffer2({0}),
+    m_dmxBuffer1{0},
+    m_dmxBuffer2{0},
     m_activeBuffer(m_dmxBuffer1),
     m_inactiveBuffer(m_dmxBuffer2),
     m_dmxBufferIndex(0),
     m_frameCount(0),
     m_newFrame(false),
+    m_rdmChange(false),
     m_mode(DMX_OFF),
     m_state(State::IDLE),
     m_redePin(portOutputRegister(redePin)),
     m_rdmMute(false),
     m_identifyMode(false),
     m_rdm(rdm),
-    m_deviceLabel({0})
+    m_deviceLabel{0}
 {
     pinMode(redePin, OUTPUT);
     *m_redePin = 0;
@@ -109,9 +109,21 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin)
     }
 }
 
-const volatile uint8_t* TeensyDmx::getBuffer() const
+TeensyDmx::TeensyDmx(HardwareSerial& uart, uint8_t redePin) :
+    TeensyDmx(uart, nullptr, redePin)
 {
+}
+
+const volatile uint8_t* TeensyDmx::getBuffer() const {
     return m_inactiveBuffer;
+}
+
+bool TeensyDmx::isIdentify() const {
+    return m_identifyMode;
+}
+
+const char* TeensyDmx::getLabel() const {
+    return m_deviceLabel;
 }
 
 void TeensyDmx::setMode(TeensyDmx::Mode mode) {
@@ -122,6 +134,9 @@ void TeensyDmx::setMode(TeensyDmx::Mode mode) {
             break;
         case DMX_OUT:
             stopTransmit();
+            break;
+        default:
+            // No action
             break;
     }
 
@@ -141,8 +156,13 @@ void TeensyDmx::setMode(TeensyDmx::Mode mode) {
     }
 }
 
-void TeensyDmx::setChannels(const uint16_t startAddress, const uint8_t* values, const uint16_t length)
-{
+void TeensyDmx::setChannel(const uint16_t address, const uint8_t value) {
+    if (address <= 511) {
+        m_activeBuffer[address] = value;
+    }
+}
+
+void TeensyDmx::setChannels(const uint16_t startAddress, const uint8_t* values, const uint16_t length) {
     uint16_t correctedLength;
     if (startAddress + length > 512) {
         correctedLength = 512 - startAddress;
@@ -150,6 +170,9 @@ void TeensyDmx::setChannels(const uint16_t startAddress, const uint8_t* values, 
         correctedLength = length;
     }
 
+    if (startAddress > 0) {
+        memset((void*)m_activeBuffer, 0, startAddress);
+    }
     memcpy((void*)(m_activeBuffer + startAddress), values, correctedLength);
     if (startAddress + correctedLength != 512) {
         memset((void*)(m_activeBuffer + startAddress + length), 0, 512 - correctedLength);
@@ -305,6 +328,15 @@ bool TeensyDmx::newFrame(void)
     return false;
 }
 
+bool TeensyDmx::rdmChanged(void)
+{
+    if (m_rdmChange) {
+        m_rdmChange = false;
+        return true;
+    }
+    return false;
+}
+
 void TeensyDmx::completeFrame()
 {
     // Ensure we've processed all the data that may still be sitting
@@ -333,7 +365,7 @@ void TeensyDmx::completeFrame()
 
 void TeensyDmx::processRDM()
 {
-    struct RDMDATA* rdm = (struct RDMDATA*)(m_activeBuffer);
+    RDMDATA* rdm = (RDMDATA*)(m_activeBuffer);
     unsigned long timingStart = micros();
 
     bool isForMe = !DeviceIDCmp(rdm->DestID, _devID);
@@ -361,7 +393,7 @@ void TeensyDmx::processRDM()
                     // I'm in range - say hello to the lovely controller
                     
                     // respond a special discovery message !
-                    struct DISCOVERYMSG *disc = (struct DISCOVERYMSG*)(m_activeBuffer);
+                    DISCOVERYMSG *disc = (DISCOVERYMSG*)(m_activeBuffer);
                     uint16_t checksum = 6 * 0xFF;
               
                     // fill in the _rdm.discovery response structure
@@ -387,7 +419,7 @@ void TeensyDmx::processRDM()
                     m_uart.write(0);
                     m_uart.flush();
                     m_uart.begin(DMXSPEED, DMXFORMAT);
-                    for (uint16_t i = 0; i < sizeof(struct DISCOVERYMSG); ++i) {
+                    for (uint16_t i = 0; i < sizeof(DISCOVERYMSG); ++i) {
                         m_uart.write(m_activeBuffer[i]);
                         m_uart.flush();
                     }
@@ -439,6 +471,7 @@ void TeensyDmx::processRDM()
                   m_identifyMode = rdm->Data[0] != 0;
                   rdm->DataLength = 0;
                   handled = true;
+                  m_rdmChange = true;
                 }
             } else if (rdm->Parameter == SWAPINT(E120_DEVICE_LABEL)) {
                 if (rdm->DataLength > sizeof(m_deviceLabel)) {
@@ -449,6 +482,7 @@ void TeensyDmx::processRDM()
                     m_deviceLabel[rdm->DataLength] = '\0';
                     rdm->DataLength = 0;
                     handled = true;
+                    m_rdmChange = true;
                 }
             } else if (rdm->Parameter == SWAPINT(E120_DMX_START_ADDRESS)) {
                 if (rdm->DataLength != 2) {
@@ -459,10 +493,13 @@ void TeensyDmx::processRDM()
                     if ((newStartAddress <= 0) || (newStartAddress > 512)) {
                         // Out of range start address
                         nackReason = E120_NR_DATA_OUT_OF_RANGE;
+                    } else if (m_rdm == nullptr) {
+                        nackReason = E120_NR_HARDWARE_FAULT;
                     } else {
                         m_rdm->startAddress = newStartAddress;
                         rdm->DataLength = 0;
                         handled = true;
+                        m_rdmChange = true;
                     }
                 }
             } else if (rdm->Parameter == SWAPINT(E120_SUPPORTED_PARAMETERS)) {
@@ -495,15 +532,21 @@ void TeensyDmx::processRDM()
 
                     devInfo->protocolMajor = 1;
                     devInfo->protocolMinor = 0;
-                    devInfo->deviceModel = SWAPINT(m_rdm->deviceModelId);
                     devInfo->productCategory = SWAPINT(E120_PRODUCT_CATEGORY_DIMMER_CS_LED);
                     devInfo->softwareVersion = SWAPINT32(0x01000000);// 0x04020900;
-                    devInfo->footprint = SWAPINT(m_rdm->footprint);
                     devInfo->currentPersonality = 1;
                     devInfo->personalityCount = 1;
-                    devInfo->startAddress = SWAPINT(m_rdm->startAddress);
                     devInfo->subDeviceCount = 0;
                     devInfo->sensorCount = 0;
+                    if (m_rdm == nullptr) {
+                        devInfo->deviceModel = 0;
+                        devInfo->startAddress = 0;
+                        devInfo->footprint = 0;
+                    } else {
+                        devInfo->deviceModel = SWAPINT(m_rdm->deviceModelId);
+                        devInfo->startAddress = SWAPINT(m_rdm->startAddress);
+                        devInfo->footprint = SWAPINT(m_rdm->footprint);
+                    }
 
                     rdm->DataLength = sizeof(DEVICEINFO);
                     handled = true;
@@ -515,6 +558,9 @@ void TeensyDmx::processRDM()
                 } else if (rdm->SubDev != 0) {
                     // No sub-devices supported
                     nackReason = E120_NR_SUB_DEVICE_OUT_OF_RANGE;
+                } else if (m_rdm == nullptr) {
+                    rdm->DataLength = 0;
+                    handled = true;
                 } else {
                     // return the manufacturer label
                     rdm->DataLength = strlen(m_rdm->manufacturerLabel);
@@ -528,6 +574,9 @@ void TeensyDmx::processRDM()
                 } else if (rdm->SubDev != 0) {
                     // No sub-devices supported
                     nackReason = E120_NR_SUB_DEVICE_OUT_OF_RANGE;
+                } else if (m_rdm == nullptr) {
+                    rdm->DataLength = 0;
+                    handled = true;
                 } else {
                     // return the DEVICE MODEL DESCRIPTION
                     rdm->DataLength = strlen(m_rdm->deviceModel);
@@ -553,6 +602,9 @@ void TeensyDmx::processRDM()
                 } else if (rdm->SubDev != 0) {
                     // No sub-devices supported
                     nackReason = E120_NR_SUB_DEVICE_OUT_OF_RANGE;
+                } else if (m_rdm == nullptr) {
+                    rdm->DataLength = 0;
+                    handled = true;
                 } else {
                     // return the SOFTWARE_VERSION_LABEL
                     rdm->DataLength = strlen(m_rdm->softwareLabel);
@@ -567,7 +619,11 @@ void TeensyDmx::processRDM()
                     // No sub-devices supported
                     nackReason = E120_NR_SUB_DEVICE_OUT_OF_RANGE;
                 } else {
-                    WRITEINT(rdm->Data, m_rdm->startAddress);
+                    if (m_rdm == nullptr) {
+                        WRITEINT(rdm->Data, 0);
+                    } else {
+                        WRITEINT(rdm->Data, m_rdm->startAddress);
+                    }
                     rdm->DataLength = 2;
                     handled = true;
                 }
@@ -579,13 +635,17 @@ void TeensyDmx::processRDM()
                     // No sub-devices supported
                     nackReason = E120_NR_SUB_DEVICE_OUT_OF_RANGE;
                 } else {
-                    rdm->DataLength = 2 * (3 + m_rdm->additionalCommandsLength);
-                    WRITEINT(rdm->Data   , E120_MANUFACTURER_LABEL);
-                    WRITEINT(rdm->Data+ 2, E120_DEVICE_MODEL_DESCRIPTION);
-                    WRITEINT(rdm->Data+ 4, E120_DEVICE_LABEL);
-                    for (int n = 0; n < m_rdm->additionalCommandsLength; n++) {
-                        WRITEINT(rdm->Data+6+n+n, m_rdm->additionalCommands[n]);
+                    if (m_rdm == nullptr) {
+                        rdm->DataLength = 6;
+                    } else {
+                        rdm->DataLength = 2 * (3 + m_rdm->additionalCommandsLength);
+                        for (int n = 0; n < m_rdm->additionalCommandsLength; ++n) {
+                            WRITEINT(rdm->Data+6+n+n, m_rdm->additionalCommands[n]);
+                        }
                     }
+                    WRITEINT(rdm->Data,   E120_MANUFACTURER_LABEL);
+                    WRITEINT(rdm->Data+2, E120_DEVICE_MODEL_DESCRIPTION);
+                    WRITEINT(rdm->Data+4, E120_DEVICE_LABEL);
                     handled = true;
                 }
             }
@@ -606,10 +666,8 @@ void TeensyDmx::processRDM()
 
 void TeensyDmx::respondMessage(bool isHandled, uint16_t nackReason)
 {
-    int bufferLen;
     uint16_t i;
     uint16_t checkSum = 0;
-
     struct RDMDATA* rdm = (struct RDMDATA*)(m_activeBuffer);
 
     // no need to set these data fields:
@@ -651,7 +709,6 @@ void TeensyDmx::respondMessage(bool isHandled, uint16_t nackReason)
     for (uint16_t i = 0; i < rdm->Length; ++i) {
         m_uart.write(m_activeBuffer[i]);
         m_uart.flush();
-        //dmxSendByte(m_activeBuffer[i]);
     }
     m_uart.write(checkSum >> 8);
     m_uart.flush();
