@@ -365,7 +365,7 @@ void TeensyDmx::completeFrame()
 
 void TeensyDmx::processRDM()
 {
-    RDMDATA* rdm = (RDMDATA*)(m_activeBuffer);
+    struct RDMDATA* rdm = (struct RDMDATA*)(m_activeBuffer);
     unsigned long timingStart = micros();
 
     bool isForMe = !DeviceIDCmp(rdm->DestID, _devID);
@@ -393,7 +393,7 @@ void TeensyDmx::processRDM()
                     // I'm in range - say hello to the lovely controller
                     
                     // respond a special discovery message !
-                    DISCOVERYMSG *disc = (DISCOVERYMSG*)(m_activeBuffer);
+                    struct DISCOVERYMSG *disc = (struct DISCOVERYMSG*)(m_activeBuffer);
                     uint16_t checksum = 6 * 0xFF;
               
                     // fill in the _rdm.discovery response structure
@@ -419,7 +419,7 @@ void TeensyDmx::processRDM()
                     m_uart.write(0);
                     m_uart.flush();
                     m_uart.begin(DMXSPEED, DMXFORMAT);
-                    for (uint16_t i = 0; i < sizeof(DISCOVERYMSG); ++i) {
+                    for (uint16_t i = 0; i < sizeof(struct DISCOVERYMSG); ++i) {
                         m_uart.write(m_activeBuffer[i]);
                         m_uart.flush();
                     }
