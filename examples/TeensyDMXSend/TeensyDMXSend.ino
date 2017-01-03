@@ -23,6 +23,6 @@ void setup() {
 }
 
 void loop() {
-  Dmx.setChannels(0,DMXVal,1);
+  Dmx.setChannels(0, DMXVal, 1);
   Dmx.loop();
 }
