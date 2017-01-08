@@ -192,8 +192,10 @@ void TeensyDmx::nextTx()
             m_state = State::BREAK;
             m_uart.begin(BREAKSPEED, BREAKFORMAT);
             m_uart.write(0);
+            m_dmxBufferIndex = 0;
         } else {
-            m_uart.write(m_activeBuffer[m_dmxBufferIndex++]);
+            m_uart.write(m_activeBuffer[m_dmxBufferIndex]);
+            ++m_dmxBufferIndex;
         }
     }
 }
@@ -285,15 +287,12 @@ void TeensyDmx::startTransmit()
     if (&m_uart == &Serial1) {
         // Change interrupt vector to mine to monitor TX complete
         attachInterruptVector(IRQ_UART0_STATUS, UART0TxStatus);
-        attachInterruptVector(IRQ_UART0_ERROR, UART0RxError);
     } else if (&m_uart == &Serial2) {
         // Change interrupt vector to mine to monitor TX complete
         attachInterruptVector(IRQ_UART1_STATUS, UART1TxStatus);
-        attachInterruptVector(IRQ_UART1_ERROR, UART1RxError);
     } else if (&m_uart == &Serial3) {
         // Change interrupt vector to mine to monitor TX complete
         attachInterruptVector(IRQ_UART2_STATUS, UART2TxStatus);
-        attachInterruptVector(IRQ_UART2_ERROR, UART2RxError);
     }
 
     // Send BREAK
@@ -309,13 +308,10 @@ void TeensyDmx::stopTransmit()
 
     if (&m_uart == &Serial1) {
         attachInterruptVector(IRQ_UART0_STATUS, uart0_status_isr);
-        attachInterruptVector(IRQ_UART0_ERROR, uart0_error_isr);
     } else if (&m_uart == &Serial2) {
         attachInterruptVector(IRQ_UART1_STATUS, uart1_status_isr);
-        attachInterruptVector(IRQ_UART1_ERROR, uart1_error_isr);
     } else if (&m_uart == &Serial3) {
         attachInterruptVector(IRQ_UART2_STATUS, uart2_status_isr);
-        attachInterruptVector(IRQ_UART2_ERROR, uart2_error_isr);
     }
 }
 
@@ -739,6 +735,8 @@ void TeensyDmx::startReceive()
         // Enable UART0 interrupt on frame error and enable IRQ
         UART0_C3 |= UART_C3_FEIE;
         NVIC_ENABLE_IRQ(IRQ_UART0_ERROR);
+
+        attachInterruptVector(IRQ_UART0_ERROR, UART0RxError);
     } else if (&m_uart == &Serial2) {
         // Fire UART1 receive interrupt immediately after each byte received
         UART1_RWFIFO = 1;
@@ -752,6 +750,8 @@ void TeensyDmx::startReceive()
         // Enable UART1 interrupt on frame error and enable IRQ
         UART1_C3 |= UART_C3_FEIE;
         NVIC_ENABLE_IRQ(IRQ_UART1_ERROR);
+
+        attachInterruptVector(IRQ_UART1_ERROR, UART1RxError);
     } else if (&m_uart == &Serial3) {
         // Fire UART2 receive interrupt immediately after each byte received
         UART2_RWFIFO = 1;
@@ -766,6 +766,7 @@ void TeensyDmx::startReceive()
         UART2_C3 |= UART_C3_FEIE;
         NVIC_ENABLE_IRQ(IRQ_UART2_ERROR);
 
+        attachInterruptVector(IRQ_UART2_ERROR, UART2RxError);
     }
 
     m_dmxBufferIndex = 0;
@@ -779,14 +780,17 @@ void TeensyDmx::stopReceive()
         UART0_RWFIFO = 0;
         UART0_C3 &= ~UART_C3_FEIE;
         NVIC_DISABLE_IRQ(IRQ_UART0_ERROR);
+        attachInterruptVector(IRQ_UART0_ERROR, uart0_error_isr);
     } else if (&m_uart == &Serial2) {
         UART1_RWFIFO = 0;
         UART1_C3 &= ~UART_C3_FEIE;
         NVIC_DISABLE_IRQ(IRQ_UART1_ERROR);
+        attachInterruptVector(IRQ_UART1_ERROR, uart1_error_isr);
     } else if (&m_uart == &Serial3) {
         UART2_RWFIFO = 0;
         UART2_C3 &= ~UART_C3_FEIE;
         NVIC_DISABLE_IRQ(IRQ_UART2_ERROR);
+        attachInterruptVector(IRQ_UART2_ERROR, uart2_error_isr);
     }
 }
 
