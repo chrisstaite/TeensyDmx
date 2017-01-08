@@ -6,18 +6,18 @@ static constexpr uint32_t RDM_BREAKSPEED = 45500;
 static constexpr uint32_t BREAKFORMAT = SERIAL_8E1;
 static constexpr uint32_t DMXSPEED = 250000;
 static constexpr uint32_t DMXFORMAT = SERIAL_8N2;
-static constexpr uint16_t NACK_WAS_ACK = 0xffff;
+static constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
 
 // It was an easy job to register a manufacturer id to myself as explained
 // on http://tsp.plasa.org/tsp/working_groups/CP/mfctrIDs.php.
 // The ID below is designated as a prototyping ID.
-byte _devID[] = { 0x7f, 0xf0, 0x20, 0x12, 0x00, 0x00 };
+static constexpr byte _devID[] = { 0x7f, 0xf0, 0x20, 0x12, 0x00, 0x00 };
 
 // The Device ID for adressing all devices of a manufacturer.
-byte _devIDGroup[] = { 0x7f, 0xf0, 0xFF, 0xFF, 0xFF, 0xFF };
+static constexpr byte _devIDGroup[] = { 0x7f, 0xf0, 0xFF, 0xFF, 0xFF, 0xFF };
 
 // The Device ID for adressing all devices: 6 times 0xFF.
-byte _devIDAll[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+static constexpr byte _devIDAll[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 struct RDMDATA
 {
@@ -165,19 +165,18 @@ void TeensyDmx::setChannels(
         const uint8_t* values,
         const uint16_t length)
 {
-    uint16_t correctedLength;
-    if (startAddress + length > DMX_BUFFER_SIZE) {
-        correctedLength = DMX_BUFFER_SIZE - startAddress;
-    } else {
-        correctedLength = length;
+    uint16_t currentAddress = 0;
+    while (currentAddress < startAddress && currentAddress < DMX_BUFFER_SIZE) {
+        m_activeBuffer[currentAddress] = 0;
+        ++currentAddress;
     }
-
-    if (startAddress > 0) {
-        memset((void*)m_activeBuffer, 0, startAddress);
+    for (uint16_t i = 0; i < length && currentAddress < DMX_BUFFER_SIZE; ++i) {
+        m_activeBuffer[currentAddress] = values[i];
+        ++currentAddress;
     }
-    memcpy((void*)(m_activeBuffer + startAddress), values, correctedLength);
-    if (startAddress + correctedLength != DMX_BUFFER_SIZE) {
-        memset((void*)(m_activeBuffer + startAddress + length), 0, DMX_BUFFER_SIZE - correctedLength);
+    while (currentAddress < DMX_BUFFER_SIZE) {
+        m_activeBuffer[currentAddress] = 0;
+        ++currentAddress;
     }
 }
 
@@ -233,51 +232,6 @@ void UART2TxStatus()
     }
     // Call standard ISR too
     uart2_status_isr();
-}
-
-void uart0_error_isr();  // Back reference to serial1.c
-// UART0 will throw a frame error on the DMX break pulse.  That's our
-// cue to switch buffers and reset the index to zero
-void UART0RxError(void)
-{
-    // On break, uart0_status_isr() will probably have already
-    // fired and read the data buffer, clearing the framing error.
-    // If for some reason it hasn't, make sure we consume the 0x00
-    // byte that was received.
-    if (UART0_S1 & UART_S1_FE)
-        (void) UART0_D;
-
-    uartInstances[0]->completeFrame();
-}
-
-void uart1_error_isr();  // Back reference to serial2.c
-// UART1 will throw a frame error on the DMX break pulse.  That's our
-// cue to switch buffers and reset the index to zero
-void UART1RxError(void)
-{
-    // On break, uart1_status_isr() will probably have already
-    // fired and read the data buffer, clearing the framing error.
-    // If for some reason it hasn't, make sure we consume the 0x00
-    // byte that was received.
-    if (UART1_S1 & UART_S1_FE)
-        (void) UART1_D;
-
-    uartInstances[1]->completeFrame();
-}
-
-void uart2_error_isr();  // Back reference to serial3.c
-// UART2 will throw a frame error on the DMX break pulse.  That's our
-// cue to switch buffers and reset the index to zero
-void UART2RxError(void)
-{
-    // On break, uart2_status_isr() will probably have already
-    // fired and read the data buffer, clearing the framing error.
-    // If for some reason it hasn't, make sure we consume the 0x00
-    // byte that was received.
-    if (UART2_S1 & UART_S1_FE)
-        (void) UART2_D;
-
-    uartInstances[2]->completeFrame();
 }
 
 void TeensyDmx::startTransmit()
@@ -751,7 +705,7 @@ void TeensyDmx::processRDM()
                 respondMessage(timingStart, E120_NR_UNKNOWN_PID);
                 break;
         }
-    }    
+    }
 }
 
 void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
@@ -769,9 +723,9 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
     // no need to set these data fields:
     // StartCode, SubStartCode
     if (nackReason == NACK_WAS_ACK) {
-        rdm->ResponseType = E120_RESPONSE_TYPE_ACK; // 0x00
+        rdm->ResponseType = E120_RESPONSE_TYPE_ACK;
     } else {
-        rdm->ResponseType = E120_RESPONSE_TYPE_NACK_REASON; // 0x00
+        rdm->ResponseType = E120_RESPONSE_TYPE_NACK_REASON;
         rdm->DataLength = 2;
         rdm->Data[0] = (nackReason >> 8) & 0xFF;
         rdm->Data[1] = nackReason & 0xFF;
@@ -813,6 +767,51 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
 
     // Restart receive
     startReceive();
+}
+
+void uart0_error_isr();  // Back reference to serial1.c
+// UART0 will throw a frame error on the DMX break pulse.  That's our
+// cue to switch buffers and reset the index to zero
+void UART0RxError(void)
+{
+    // On break, uart0_status_isr() will probably have already
+    // fired and read the data buffer, clearing the framing error.
+    // If for some reason it hasn't, make sure we consume the 0x00
+    // byte that was received.
+    if (UART0_S1 & UART_S1_FE)
+        (void) UART0_D;
+
+    uartInstances[0]->completeFrame();
+}
+
+void uart1_error_isr();  // Back reference to serial2.c
+// UART1 will throw a frame error on the DMX break pulse.  That's our
+// cue to switch buffers and reset the index to zero
+void UART1RxError(void)
+{
+    // On break, uart1_status_isr() will probably have already
+    // fired and read the data buffer, clearing the framing error.
+    // If for some reason it hasn't, make sure we consume the 0x00
+    // byte that was received.
+    if (UART1_S1 & UART_S1_FE)
+        (void) UART1_D;
+
+    uartInstances[1]->completeFrame();
+}
+
+void uart2_error_isr();  // Back reference to serial3.c
+// UART2 will throw a frame error on the DMX break pulse.  That's our
+// cue to switch buffers and reset the index to zero
+void UART2RxError(void)
+{
+    // On break, uart2_status_isr() will probably have already
+    // fired and read the data buffer, clearing the framing error.
+    // If for some reason it hasn't, make sure we consume the 0x00
+    // byte that was received.
+    if (UART2_S1 & UART_S1_FE)
+        (void) UART2_D;
+
+    uartInstances[2]->completeFrame();
 }
 
 void TeensyDmx::startReceive()
@@ -899,10 +898,13 @@ void TeensyDmx::readBytes()
     __disable_irq();  // Prevents conflicts with the error ISR
 
     int available = m_uart.available();
-    while (available--) {
-        switch (m_state) {
+    while (available--)
+    {
+        switch (m_state)
+        {
             case State::BREAK:
-                switch (m_uart.read()) {
+                switch (m_uart.read())
+                {
                     case 0:
                         m_state = State::DMX_RECV;
                         break;
@@ -919,7 +921,7 @@ void TeensyDmx::readBytes()
                 ++m_dmxBufferIndex;
                 m_activeBuffer[m_dmxBufferIndex] = m_uart.read();
 
-                if (m_dmxBufferIndex == DMX_BUFFER_SIZE) {
+                if (m_dmxBufferIndex >= DMX_BUFFER_SIZE) {
                     if (m_state == State::DMX_RECV) {
                         m_state = State::DMX_COMPLETE;
                     } else {
