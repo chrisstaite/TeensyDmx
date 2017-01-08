@@ -34,7 +34,8 @@
 #define UART_C3_FEIE    (uint8_t)0x02   // Framing Error Interrupt Enable
 #endif
 
-struct RDMINIT {
+struct RDMINIT
+{
     const char *softwareLabel;
     const char *manufacturerLabel;
     const uint16_t deviceModelId;
@@ -70,7 +71,8 @@ class TeensyDmx
 	    void setChannel(const uint16_t address, const uint8_t value);
 	    // Use for transmit with addresses from 1-512
 	    // Will keep all other values as they were previously
-	    void setDmxChannel(const uint16_t address, const uint8_t value) {
+	    void setDmxChannel(const uint16_t address, const uint8_t value)
+	    {
 	        setChannel(address - 1, value);
 	    }
 	
@@ -79,7 +81,8 @@ class TeensyDmx
         void setChannels(const uint16_t startAddress, const uint8_t* values, const uint16_t length);
         // Use for transmit with channels from 1-512
         // Will set all other channels to 0
-        void setDmxChannels(const uint16_t startAddress, const uint8_t* values, const uint16_t length) {
+        void setDmxChannels(const uint16_t startAddress, const uint8_t* values, const uint16_t length)
+        {
             setChannels(startAddress - 1, values, length);
         }
 
@@ -97,27 +100,27 @@ class TeensyDmx
         
         void completeFrame();  // Called at error ISR during recv
         void processRDM();
-        void respondMessage(unsigned long timingStart, bool isHandled, uint16_t nackReason);
+        void respondMessage(unsigned long timingStart, uint16_t nackReason);
         void readBytes();  // Recv handler
 
         void nextTx();
         
         // RDM handler functions
-        void rdmUniqueBranch(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmUnmute(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmMute(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmSetIdentify(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmSetDeviceLabel(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmSetStartAddress(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmSetParameters(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmGetIdentify(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmGetDeviceInfo(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmGetManufacturerLabel(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmGetModelDescription(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmGetDeviceLabel(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmGetSoftwareVersion(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmGetStartAddress(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
-        void rdmGetParameters(const unsigned long timingStart, bool isForMe, struct RDMDATA* rdm);
+        void rdmUniqueBranch(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmUnmute(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmMute(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmSetIdentify(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmSetDeviceLabel(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmSetStartAddress(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmSetParameters(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmGetIdentify(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmGetDeviceInfo(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmGetManufacturerLabel(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmGetModelDescription(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmGetDeviceLabel(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmGetSoftwareVersion(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmGetStartAddress(const unsigned long timingStart, struct RDMDATA* rdm);
+        void rdmGetParameters(const unsigned long timingStart, struct RDMDATA* rdm);
         
         HardwareSerial& m_uart;
         
@@ -136,16 +139,6 @@ class TeensyDmx
         bool m_identifyMode;
         struct RDMINIT *m_rdm;
         char m_deviceLabel[32];
-
-        typedef void (TeensyDmx::*RdmHandlerFunction)(const unsigned long, bool, struct RDMDATA*);
-        struct RdmHandler
-        {
-            byte commandClass;
-            uint16_t parameter;
-            RdmHandlerFunction function;
-        };
-        
-        RdmHandler m_rdmHandlers[15];
         
         friend void UART0TxStatus(void);
         friend void UART1TxStatus(void);
