@@ -157,15 +157,15 @@ void TeensyDmx::setMode(TeensyDmx::Mode mode) {
 }
 
 void TeensyDmx::setChannel(const uint16_t address, const uint8_t value) {
-    if (address <= 511) {
+    if (address < DMX_BUFFER_SIZE) {
         m_activeBuffer[address] = value;
     }
 }
 
 void TeensyDmx::setChannels(const uint16_t startAddress, const uint8_t* values, const uint16_t length) {
     uint16_t correctedLength;
-    if (startAddress + length > 512) {
-        correctedLength = 512 - startAddress;
+    if (startAddress + length > DMX_BUFFER_SIZE) {
+        correctedLength = DMX_BUFFER_SIZE - startAddress;
     } else {
         correctedLength = length;
     }
@@ -174,8 +174,8 @@ void TeensyDmx::setChannels(const uint16_t startAddress, const uint8_t* values, 
         memset((void*)m_activeBuffer, 0, startAddress);
     }
     memcpy((void*)(m_activeBuffer + startAddress), values, correctedLength);
-    if (startAddress + correctedLength != 512) {
-        memset((void*)(m_activeBuffer + startAddress + length), 0, 512 - correctedLength);
+    if (startAddress + correctedLength != DMX_BUFFER_SIZE) {
+        memset((void*)(m_activeBuffer + startAddress + length), 0, DMX_BUFFER_SIZE - correctedLength);
     }
 }
 
@@ -187,7 +187,7 @@ void TeensyDmx::nextTx()
         m_uart.write(0);
     } else if (m_state == State::DMX_TX) {
         // Check if we're at the end of the packet
-        if (m_dmxBufferIndex == 512) {
+        if (m_dmxBufferIndex == DMX_BUFFER_SIZE) {
             // Send BREAK
             m_state = State::BREAK;
             m_uart.begin(BREAKSPEED, BREAKFORMAT);
@@ -490,7 +490,7 @@ void TeensyDmx::processRDM()
                     nackReason = E120_NR_FORMAT_ERROR;
                 } else {
                     uint16_t newStartAddress = READINT(rdm->Data);
-                    if ((newStartAddress <= 0) || (newStartAddress > 512)) {
+                    if ((newStartAddress <= 0) || (newStartAddress > DMX_BUFFER_SIZE)) {
                         // Out of range start address
                         nackReason = E120_NR_DATA_OUT_OF_RANGE;
                     } else if (m_rdm == nullptr) {
