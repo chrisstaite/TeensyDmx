@@ -204,34 +204,82 @@ void TeensyDmx::nextTx()
 void uart0_status_isr();  // Back reference to serial1.c
 void UART0TxStatus()
 {
-    if ((UART0_C2 & UART_C2_TCIE) && (UART0_S1 & UART_S1_TC)) {
-        // TX complete
-        uartInstances[0]->nextTx();
+#ifdef IRQ_UART0_ERROR
+    if (uartInstances[0]->m_mode == DMX_IN)
+    {
+        if (UART0_S1 & UART_S1_FE)
+        {
+            (void) UART0_D;
+            uart0_status_isr();
+            uartInstances[0]->completeFrame();
+        }
     }
-    // Call standard ISR too
-    uart0_status_isr();
+    else
+    {
+#endif
+        if ((UART0_C2 & UART_C2_TCIE) && (UART0_S1 & UART_S1_TC)) {
+            // TX complete
+            uartInstances[0]->nextTx();
+        }
+        // Call standard ISR too
+        uart0_status_isr();
+#ifdef IRQ_UART0_ERROR
+    }
+#endif
 }
 
 void uart1_status_isr();  // Back reference to serial2.c
 void UART1TxStatus()
 {
-    if ((UART1_C2 & UART_C2_TCIE) && (UART1_S1 & UART_S1_TC)) {
-        // TX complete
-        uartInstances[1]->nextTx();
+#ifdef IRQ_UART1_ERROR
+    if (uartInstances[1]->m_mode == DMX_IN)
+    {
+        if (UART1_S1 & UART_S1_FE)
+        {
+            (void) UART1_D;
+            uart1_status_isr();
+            uartInstances[1]->completeFrame();
+        }
     }
-    // Call standard ISR too
-    uart1_status_isr();
+    else
+    {
+#endif
+        if ((UART1_C2 & UART_C2_TCIE) && (UART1_S1 & UART_S1_TC)) {
+            // TX complete
+            uartInstances[1]->nextTx();
+        }
+        // Call standard ISR too
+        uart1_status_isr();
+#ifdef IRQ_UART1_ERROR
+    }
+#endif
 }
 
 void uart2_status_isr();  // Back reference to serial3.c
 void UART2TxStatus()
 {
-    if ((UART2_C2 & UART_C2_TCIE) && (UART2_S1 & UART_S1_TC)) {
-        // TX complete
-        uartInstances[2]->nextTx();
+#ifdef IRQ_UART2_ERROR
+    if (uartInstances[2]->m_mode == DMX_IN)
+    {
+        if (UART2_S1 & UART_S1_FE)
+        {
+            (void) UART2_D;
+            uart2_status_isr();
+            uartInstances[2]->completeFrame();
+        }
     }
-    // Call standard ISR too
-    uart2_status_isr();
+    else
+    {
+#endif
+        if ((UART2_C2 & UART_C2_TCIE) && (UART2_S1 & UART_S1_TC)) {
+            // TX complete
+            uartInstances[2]->nextTx();
+        }
+        // Call standard ISR too
+        uart2_status_isr();
+#ifdef IRQ_UART2_ERROR
+    }
+#endif
 }
 
 void TeensyDmx::startTransmit()
@@ -821,6 +869,18 @@ void TeensyDmx::startReceive()
     // UART Initialisation
     m_uart.begin(250000);
 
+#ifndef IRQ_UART0_ERROR
+    if (&m_uart == &Serial1) {
+        // Change interrupt vector to mine to monitor TX complete
+        attachInterruptVector(IRQ_UART0_STATUS, UART0TxStatus);
+    } else if (&m_uart == &Serial2) {
+        // Change interrupt vector to mine to monitor TX complete
+        attachInterruptVector(IRQ_UART1_STATUS, UART1TxStatus);
+    } else if (&m_uart == &Serial3) {
+        // Change interrupt vector to mine to monitor TX complete
+        attachInterruptVector(IRQ_UART2_STATUS, UART2TxStatus);
+    }
+#else
     if (&m_uart == &Serial1) {
         // Fire UART0 receive interrupt immediately after each byte received
         UART0_RWFIFO = 1;
@@ -867,6 +927,7 @@ void TeensyDmx::startReceive()
 
         attachInterruptVector(IRQ_UART2_ERROR, UART2RxError);
     }
+#endif
 
     m_dmxBufferIndex = 0;
     m_state = State::IDLE;
@@ -875,6 +936,16 @@ void TeensyDmx::startReceive()
 void TeensyDmx::stopReceive()
 {
     m_uart.end();
+
+#ifndef IRQ_UART0_ERROR
+    if (&m_uart == &Serial1) {
+        attachInterruptVector(IRQ_UART0_STATUS, uart0_status_isr);
+    } else if (&m_uart == &Serial2) {
+        attachInterruptVector(IRQ_UART1_STATUS, uart1_status_isr);
+    } else if (&m_uart == &Serial3) {
+        attachInterruptVector(IRQ_UART2_STATUS, uart2_status_isr);
+    }
+#else
     if (&m_uart == &Serial1) {
         UART0_RWFIFO = 0;
         UART0_C3 &= ~UART_C3_FEIE;
@@ -891,6 +962,7 @@ void TeensyDmx::stopReceive()
         NVIC_DISABLE_IRQ(IRQ_UART2_ERROR);
         attachInterruptVector(IRQ_UART2_ERROR, uart2_error_isr);
     }
+#endif
 }
 
 void TeensyDmx::readBytes()
