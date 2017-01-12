@@ -63,8 +63,13 @@ struct DEVICEINFO
   byte sensorCount;
 }; // struct DEVICEINFO
 
+#ifdef HAS_KINETISK_UART5
+// Instance for UART0, UART1, UART2, UART3, UART4, UART5
+static TeensyDmx *uartInstances[6] = {0};
+#else
 // Instance for UART0, UART1, UART2
 static TeensyDmx *uartInstances[3] = {0};
+#endif
 
 static inline void putInt(void* const buffer, const size_t offset, const uint16_t value)
 {
@@ -100,6 +105,21 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin)
     } else if (&m_uart == &Serial3) {
         uartInstances[2] = this;
     }
+#ifdef HAS_KINETISK_UART3
+    else if (&m_uart == &Serial4) {
+        uartInstances[3] = this;
+    }
+#endif
+#ifdef HAS_KINETISK_UART4
+    else if (&m_uart == &Serial5) {
+        uartInstances[4] = this;
+    }
+#endif
+#ifdef HAS_KINETISK_UART5
+    else if (&m_uart == &Serial6) {
+        uartInstances[5] = this;
+    }
+#endif
 }
 
 TeensyDmx::TeensyDmx(HardwareSerial& uart, uint8_t redePin) :
@@ -204,8 +224,8 @@ void TeensyDmx::nextTx()
 void uart0_status_isr();  // Back reference to serial1.c
 void UART0TxStatus()
 {
-#ifdef IRQ_UART0_ERROR
-    if (uartInstances[0]->m_mode == DMX_IN)
+#ifndef IRQ_UART0_ERROR
+    if (uartInstances[0]->m_mode == TeensyDmx::Mode::DMX_IN)
     {
         if (UART0_S1 & UART_S1_FE)
         {
@@ -223,7 +243,7 @@ void UART0TxStatus()
         }
         // Call standard ISR too
         uart0_status_isr();
-#ifdef IRQ_UART0_ERROR
+#ifndef IRQ_UART0_ERROR
     }
 #endif
 }
@@ -231,8 +251,8 @@ void UART0TxStatus()
 void uart1_status_isr();  // Back reference to serial2.c
 void UART1TxStatus()
 {
-#ifdef IRQ_UART1_ERROR
-    if (uartInstances[1]->m_mode == DMX_IN)
+#ifndef IRQ_UART1_ERROR
+    if (uartInstances[1]->m_mode == TeensyDmx::Mode::DMX_IN)
     {
         if (UART1_S1 & UART_S1_FE)
         {
@@ -250,7 +270,7 @@ void UART1TxStatus()
         }
         // Call standard ISR too
         uart1_status_isr();
-#ifdef IRQ_UART1_ERROR
+#ifndef IRQ_UART1_ERROR
     }
 #endif
 }
@@ -258,8 +278,8 @@ void UART1TxStatus()
 void uart2_status_isr();  // Back reference to serial3.c
 void UART2TxStatus()
 {
-#ifdef IRQ_UART2_ERROR
-    if (uartInstances[2]->m_mode == DMX_IN)
+#ifndef IRQ_UART2_ERROR
+    if (uartInstances[2]->m_mode == TeensyDmx::Mode::DMX_IN)
     {
         if (UART2_S1 & UART_S1_FE)
         {
@@ -277,10 +297,49 @@ void UART2TxStatus()
         }
         // Call standard ISR too
         uart2_status_isr();
-#ifdef IRQ_UART2_ERROR
+#ifndef IRQ_UART2_ERROR
     }
 #endif
 }
+
+#ifdef HAS_KINETISK_UART3
+void uart3_status_isr();  // Back reference to serial3.c
+void UART3TxStatus()
+{
+    if ((UART3_C2 & UART_C2_TCIE) && (UART3_S1 & UART_S1_TC)) {
+        // TX complete
+        uartInstances[3]->nextTx();
+    }
+    // Call standard ISR too
+    uart3_status_isr();
+}
+#endif
+
+#ifdef HAS_KINETISK_UART4
+void uart4_status_isr();  // Back reference to serial3.c
+void UART4TxStatus()
+{
+    if ((UART4_C2 & UART_C2_TCIE) && (UART4_S1 & UART_S1_TC)) {
+        // TX complete
+        uartInstances[4]->nextTx();
+    }
+    // Call standard ISR too
+    uart4_status_isr();
+}
+#endif
+
+#ifdef HAS_KINETISK_UART5
+void uart5_status_isr();  // Back reference to serial3.c
+void UART5TxStatus()
+{
+    if ((UART5_C2 & UART_C2_TCIE) && (UART5_S1 & UART_S1_TC)) {
+        // TX complete
+        uartInstances[5]->nextTx();
+    }
+    // Call standard ISR too
+    uart5_status_isr();
+}
+#endif
 
 void TeensyDmx::startTransmit()
 {
@@ -298,6 +357,24 @@ void TeensyDmx::startTransmit()
         // Change interrupt vector to mine to monitor TX complete
         attachInterruptVector(IRQ_UART2_STATUS, UART2TxStatus);
     }
+#ifdef HAS_KINETISK_UART3
+    else if (&m_uart == &Serial4) {
+        // Change interrupt vector to mine to monitor TX complete
+        attachInterruptVector(IRQ_UART3_STATUS, UART3TxStatus);
+    }
+#endif
+#ifdef HAS_KINETISK_UART4
+    else if (&m_uart == &Serial5) {
+        // Change interrupt vector to mine to monitor TX complete
+        attachInterruptVector(IRQ_UART4_STATUS, UART4TxStatus);
+    }
+#endif
+#ifdef HAS_KINETISK_UART5
+    else if (&m_uart == &Serial6) {
+        // Change interrupt vector to mine to monitor TX complete
+        attachInterruptVector(IRQ_UART5_STATUS, UART5TxStatus);
+    }
+#endif
 
     // Send BREAK
     m_state = State::BREAK;
@@ -317,6 +394,21 @@ void TeensyDmx::stopTransmit()
     } else if (&m_uart == &Serial3) {
         attachInterruptVector(IRQ_UART2_STATUS, uart2_status_isr);
     }
+#ifdef HAS_KINETISK_UART3
+    else if (&m_uart == &Serial4) {
+        attachInterruptVector(IRQ_UART3_STATUS, uart3_status_isr);
+    }
+#endif
+#ifdef HAS_KINETISK_UART4
+    else if (&m_uart == &Serial5) {
+        attachInterruptVector(IRQ_UART4_STATUS, uart4_status_isr);
+    }
+#endif
+#ifdef HAS_KINETISK_UART5
+    else if (&m_uart == &Serial6) {
+        attachInterruptVector(IRQ_UART5_STATUS, uart5_status_isr);
+    }
+#endif
 }
 
 bool TeensyDmx::newFrame(void)
@@ -862,6 +954,57 @@ void UART2RxError(void)
     uartInstances[2]->completeFrame();
 }
 
+#ifdef HAS_KINETISK_UART3
+void uart3_error_isr();  // Back reference to serial4.c
+// UART3 will throw a frame error on the DMX break pulse.  That's our
+// cue to switch buffers and reset the index to zero
+void UART3RxError(void)
+{
+    // On break, uart3_status_isr() will probably have already
+    // fired and read the data buffer, clearing the framing error.
+    // If for some reason it hasn't, make sure we consume the 0x00
+    // byte that was received.
+    if (UART3_S1 & UART_S1_FE)
+        (void) UART3_D;
+
+    uartInstances[3]->completeFrame();
+}
+#endif
+
+#ifdef HAS_KINETISK_UART4
+void uart4_error_isr();  // Back reference to serial5.c
+// UART4 will throw a frame error on the DMX break pulse.  That's our
+// cue to switch buffers and reset the index to zero
+void UART4RxError(void)
+{
+    // On break, uart4_status_isr() will probably have already
+    // fired and read the data buffer, clearing the framing error.
+    // If for some reason it hasn't, make sure we consume the 0x00
+    // byte that was received.
+    if (UART4_S1 & UART_S1_FE)
+        (void) UART4_D;
+
+    uartInstances[4]->completeFrame();
+}
+#endif
+
+#ifdef HAS_KINETISK_UART5
+void uart5_error_isr();  // Back reference to serial6.c
+// UART2 will throw a frame error on the DMX break pulse.  That's our
+// cue to switch buffers and reset the index to zero
+void UART5RxError(void)
+{
+    // On break, uart5_status_isr() will probably have already
+    // fired and read the data buffer, clearing the framing error.
+    // If for some reason it hasn't, make sure we consume the 0x00
+    // byte that was received.
+    if (UART5_S1 & UART_S1_FE)
+        (void) UART5_D;
+
+    uartInstances[5]->completeFrame();
+}
+#endif
+
 void TeensyDmx::startReceive()
 {
     *m_redePin = 0;
@@ -927,6 +1070,60 @@ void TeensyDmx::startReceive()
 
         attachInterruptVector(IRQ_UART2_ERROR, UART2RxError);
     }
+#ifdef HAS_KINETISK_UART3
+    else if (&m_uart == &Serial4) {
+        // Fire UART3 receive interrupt immediately after each byte received
+        UART3_RWFIFO = 1;
+        
+        // Set error IRQ priority lower than that of the status IRQ,
+        // so that the status IRQ receives any leftover bytes before
+        // we detect and trigger a new frame.
+        NVIC_SET_PRIORITY(IRQ_UART3_ERROR,
+                          NVIC_GET_PRIORITY(IRQ_UART3_STATUS) + 1);
+
+        // Enable UART2 interrupt on frame error and enable IRQ
+        UART3_C3 |= UART_C3_FEIE;
+        NVIC_ENABLE_IRQ(IRQ_UART3_ERROR);
+
+        attachInterruptVector(IRQ_UART3_ERROR, UART3RxError);
+    }
+#endif
+#ifdef HAS_KINETISK_UART4
+    else if (&m_uart == &Serial5) {
+        // Fire UART4 receive interrupt immediately after each byte received
+        UART4_RWFIFO = 1;
+        
+        // Set error IRQ priority lower than that of the status IRQ,
+        // so that the status IRQ receives any leftover bytes before
+        // we detect and trigger a new frame.
+        NVIC_SET_PRIORITY(IRQ_UART4_ERROR,
+                          NVIC_GET_PRIORITY(IRQ_UART4_STATUS) + 1);
+
+        // Enable UART2 interrupt on frame error and enable IRQ
+        UART4_C3 |= UART_C3_FEIE;
+        NVIC_ENABLE_IRQ(IRQ_UART4_ERROR);
+
+        attachInterruptVector(IRQ_UART4_ERROR, UART4RxError);
+    }
+#endif
+#ifdef HAS_KINETISK_UART5
+    else if (&m_uart == &Serial6) {
+        // Fire UART5 receive interrupt immediately after each byte received
+        UART5_RWFIFO = 1;
+        
+        // Set error IRQ priority lower than that of the status IRQ,
+        // so that the status IRQ receives any leftover bytes before
+        // we detect and trigger a new frame.
+        NVIC_SET_PRIORITY(IRQ_UART5_ERROR,
+                          NVIC_GET_PRIORITY(IRQ_UART5_STATUS) + 1);
+
+        // Enable UART2 interrupt on frame error and enable IRQ
+        UART5_C3 |= UART_C3_FEIE;
+        NVIC_ENABLE_IRQ(IRQ_UART5_ERROR);
+
+        attachInterruptVector(IRQ_UART5_ERROR, UART5RxError);
+    }
+#endif
 #endif
 
     m_dmxBufferIndex = 0;
@@ -945,6 +1142,21 @@ void TeensyDmx::stopReceive()
     } else if (&m_uart == &Serial3) {
         attachInterruptVector(IRQ_UART2_STATUS, uart2_status_isr);
     }
+#ifdef HAS_KINETISK_UART3
+    else if (&m_uart == &Serial4) {
+        attachInterruptVector(IRQ_UART3_STATUS, uart3_status_isr);
+    }
+#endif
+#ifdef HAS_KINETISK_UART4
+    else if (&m_uart == &Serial5) {
+        attachInterruptVector(IRQ_UART4_STATUS, uart4_status_isr);
+    }
+#endif
+#ifdef HAS_KINETISK_UART5
+    else if (&m_uart == &Serial6) {
+        attachInterruptVector(IRQ_UART5_STATUS, uart5_status_isr);
+    }
+#endif
 #else
     if (&m_uart == &Serial1) {
         UART0_RWFIFO = 0;

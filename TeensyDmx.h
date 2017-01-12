@@ -146,6 +146,18 @@ class TeensyDmx
     friend void UART0RxError(void);
     friend void UART1RxError(void);
     friend void UART2RxError(void);
+#ifdef HAS_KINETISK_UART3
+    friend void UART3TxStatus(void);
+    friend void UART3RxError(void);
+#endif
+#ifdef HAS_KINETISK_UART4
+    friend void UART4TxStatus(void);
+    friend void UART4RxError(void);
+#endif
+#ifdef HAS_KINETISK_UART5
+    friend void UART5TxStatus(void);
+    friend void UART5RxError(void);
+#endif
 };
 
 #endif  // _TEENSYDMX_H
