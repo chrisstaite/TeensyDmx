@@ -77,7 +77,7 @@ static inline void putInt(void* const buffer, const size_t offset, const uint16_
     reinterpret_cast<byte*>(buffer)[offset + 1] = value & 0xff;
 }
 
-TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin) :
+TeensyDmx::TeensyDmx(HardwareSerial& uart) :
     m_uart(uart),
     m_dmxBuffer1{0},
     m_dmxBuffer2{0},
@@ -89,15 +89,12 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin)
     m_rdmChange(false),
     m_mode(DMX_OFF),
     m_state(State::IDLE),
-    m_redePin(portOutputRegister(redePin)),
+    m_redePin(nullptr),
     m_rdmMute(false),
     m_identifyMode(false),
-    m_rdm(rdm),
+    m_rdm(nullptr),
     m_deviceLabel{0}
 {
-    pinMode(redePin, OUTPUT);
-    *m_redePin = 0;
-
     if (&m_uart == &Serial1) {
         uartInstances[0] = this;
     } else if (&m_uart == &Serial2) {
@@ -123,8 +120,22 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin)
 }
 
 TeensyDmx::TeensyDmx(HardwareSerial& uart, uint8_t redePin) :
-    TeensyDmx(uart, nullptr, redePin)
+    TeensyDmx(uart)
 {
+    m_redePin = portOutputRegister(redePin);
+    *m_redePin = 0;
+}
+
+TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm) :
+    TeensyDmx(uart)
+{
+    m_rdm = rdm;
+}
+    
+TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin) :
+    TeensyDmx(uart, redePin)
+{
+    m_rdm = rdm;
 }
 
 const volatile uint8_t* TeensyDmx::getBuffer() const
@@ -168,7 +179,9 @@ void TeensyDmx::setMode(TeensyDmx::Mode mode)
             startTransmit();
             break;
         default:
-            *m_redePin = 0;  // Off puts in receive state so as to be passive
+            if (m_redePin != nullptr) {
+                *m_redePin = 0;  // Off puts in receive state so as to be passive
+            }
             break;
     }
 }
@@ -343,7 +356,9 @@ void UART5TxStatus()
 
 void TeensyDmx::startTransmit()
 {
-    *m_redePin = 1;
+    if (m_redePin != nullptr) {
+        *m_redePin = 1;
+    }
 
     m_dmxBufferIndex = 0;
 
@@ -487,7 +502,9 @@ void TeensyDmx::rdmUniqueBranch(const unsigned long timingStart, struct RDMDATA*
     
         // Send reply
         stopReceive();
-        *m_redePin = 1;
+        if (m_redePin != nullptr) {
+            *m_redePin = 1;
+        }
         m_dmxBufferIndex = 0;
         m_uart.begin(RDM_BREAKSPEED, BREAKFORMAT);
         m_uart.write(0);
@@ -887,7 +904,9 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
 
     // Send reply
     stopReceive();
-    *m_redePin = 1;
+    if (m_redePin != nullptr) {
+        *m_redePin = 1;
+    }
     m_dmxBufferIndex = 0;
 
     m_uart.begin(RDM_BREAKSPEED, BREAKFORMAT);
@@ -1007,7 +1026,9 @@ void UART5RxError(void)
 
 void TeensyDmx::startReceive()
 {
-    *m_redePin = 0;
+    if (m_redePin != nullptr) {
+        *m_redePin = 0;
+    }
 
     // UART Initialisation
     m_uart.begin(250000);

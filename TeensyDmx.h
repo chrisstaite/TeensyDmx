@@ -50,8 +50,10 @@ class TeensyDmx
 {
   public:
     enum Mode { DMX_OFF, DMX_IN, DMX_OUT };
-    TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin);
+    TeensyDmx(HardwareSerial& uart);
     TeensyDmx(HardwareSerial& uart, uint8_t redePin);
+    TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm);
+    TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin);
     void setMode(TeensyDmx::Mode mode);
     void loop();
 
