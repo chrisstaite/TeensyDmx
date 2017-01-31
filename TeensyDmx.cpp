@@ -63,9 +63,15 @@ struct DEVICEINFO
   byte sensorCount;
 }; // struct DEVICEINFO
 
-#ifdef HAS_KINETISK_UART5
+#if defined(HAS_KINETISK_UART5)
 // Instance for UART0, UART1, UART2, UART3, UART4, UART5
 static TeensyDmx *uartInstances[6] = {0};
+#elif defined(HAS_KINETISK_UART4)
+// Instance for UART0, UART1, UART2, UART3, UART4
+static TeensyDmx *uartInstances[5] = {0};
+#elif defined(HAS_KINETISK_UART3)
+// Instance for UART0, UART1, UART2, UART3
+static TeensyDmx *uartInstances[4] = {0};
 #else
 // Instance for UART0, UART1, UART2
 static TeensyDmx *uartInstances[3] = {0};
