@@ -122,6 +122,7 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart) :
 TeensyDmx::TeensyDmx(HardwareSerial& uart, uint8_t redePin) :
     TeensyDmx(uart)
 {
+    pinMode(redePin, OUTPUT);
     m_redePin = portOutputRegister(redePin);
     *m_redePin = 0;
 }
