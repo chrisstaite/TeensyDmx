@@ -253,6 +253,10 @@ void UART0TxStatus()
             uart0_status_isr();
             uartInstances[0]->completeFrame();
         }
+        else
+        {
+            uart0_status_isr();
+        }
     }
     else
     {
@@ -280,6 +284,10 @@ void UART1TxStatus()
             uart1_status_isr();
             uartInstances[1]->completeFrame();
         }
+        else
+        {
+            uart1_status_isr();
+        }
     }
     else
     {
@@ -306,6 +314,10 @@ void UART2TxStatus()
             (void) UART2_D;
             uart2_status_isr();
             uartInstances[2]->completeFrame();
+        }
+        else
+        {
+            uart2_status_isr();
         }
     }
     else
