@@ -1055,12 +1055,15 @@ void TeensyDmx::startReceive()
 #ifndef IRQ_UART0_ERROR
     if (&m_uart == &Serial1) {
         // Change interrupt vector to mine to monitor TX complete
+        UART0_C3 |= UART_C3_FEIE;
         attachInterruptVector(IRQ_UART0_STATUS, UART0TxStatus);
     } else if (&m_uart == &Serial2) {
         // Change interrupt vector to mine to monitor TX complete
+        UART1_C3 |= UART_C3_FEIE;
         attachInterruptVector(IRQ_UART1_STATUS, UART1TxStatus);
     } else if (&m_uart == &Serial3) {
         // Change interrupt vector to mine to monitor TX complete
+        UART1_C3 |= UART_C3_FEIE;
         attachInterruptVector(IRQ_UART2_STATUS, UART2TxStatus);
     }
 #else
@@ -1176,27 +1179,15 @@ void TeensyDmx::stopReceive()
 
 #ifndef IRQ_UART0_ERROR
     if (&m_uart == &Serial1) {
+        UART1_C3 &= ~UART_C3_FEIE;
         attachInterruptVector(IRQ_UART0_STATUS, uart0_status_isr);
     } else if (&m_uart == &Serial2) {
+        UART1_C3 &= ~UART_C3_FEIE;
         attachInterruptVector(IRQ_UART1_STATUS, uart1_status_isr);
     } else if (&m_uart == &Serial3) {
+        UART1_C3 &= ~UART_C3_FEIE;
         attachInterruptVector(IRQ_UART2_STATUS, uart2_status_isr);
     }
-#ifdef HAS_KINETISK_UART3
-    else if (&m_uart == &Serial4) {
-        attachInterruptVector(IRQ_UART3_STATUS, uart3_status_isr);
-    }
-#endif
-#ifdef HAS_KINETISK_UART4
-    else if (&m_uart == &Serial5) {
-        attachInterruptVector(IRQ_UART4_STATUS, uart4_status_isr);
-    }
-#endif
-#ifdef HAS_KINETISK_UART5
-    else if (&m_uart == &Serial6) {
-        attachInterruptVector(IRQ_UART5_STATUS, uart5_status_isr);
-    }
-#endif
 #else
     if (&m_uart == &Serial1) {
         UART0_RWFIFO = 0;
@@ -1214,6 +1205,30 @@ void TeensyDmx::stopReceive()
         NVIC_DISABLE_IRQ(IRQ_UART2_ERROR);
         attachInterruptVector(IRQ_UART2_ERROR, uart2_error_isr);
     }
+#ifdef HAS_KINETISK_UART3
+    else if (&m_uart == &Serial4) {
+        UART3_RWFIFO = 0;
+        UART3_C3 &= ~UART_C3_FEIE;
+        NVIC_DISABLE_IRQ(IRQ_UART3_ERROR);
+        attachInterruptVector(IRQ_UART3_ERROR, uart3_error_isr);
+    }
+#endif
+#ifdef HAS_KINETISK_UART4
+    else if (&m_uart == &Serial5) {
+        UART4_RWFIFO = 0;
+        UART4_C3 &= ~UART_C3_FEIE;
+        NVIC_DISABLE_IRQ(IRQ_UART4_ERROR);
+        attachInterruptVector(IRQ_UART4_ERROR, uart4_error_isr);
+    }
+#endif
+#ifdef HAS_KINETISK_UART5
+    else if (&m_uart == &Serial6) {
+        UART5_RWFIFO = 0;
+        UART5_C3 &= ~UART_C3_FEIE;
+        NVIC_DISABLE_IRQ(IRQ_UART5_ERROR);
+        attachInterruptVector(IRQ_UART5_ERROR, uart5_error_isr);
+    }
+#endif
 #endif
 }
 
