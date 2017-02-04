@@ -244,98 +244,38 @@ void TeensyDmx::nextTx()
 void uart0_status_isr();  // Back reference to serial1.c
 void UART0TxStatus()
 {
-#ifndef IRQ_UART0_ERROR
-    if (uartInstances[0]->m_mode == TeensyDmx::Mode::DMX_IN)
-    {
-        if (UART0_S1 & UART_S1_FE)
-        {
-            (void) UART0_D;
-            uart0_status_isr();
-            uartInstances[0]->completeFrame();
-        }
-        else
-        {
-            uart0_status_isr();
-        }
+    if ((UART0_C2 & UART_C2_TCIE) && (UART0_S1 & UART_S1_TC)) {
+        // TX complete
+        uartInstances[0]->nextTx();
     }
-    else
-    {
-#endif
-        if ((UART0_C2 & UART_C2_TCIE) && (UART0_S1 & UART_S1_TC)) {
-            // TX complete
-            uartInstances[0]->nextTx();
-        }
-        // Call standard ISR too
-        uart0_status_isr();
-#ifndef IRQ_UART0_ERROR
-    }
-#endif
+    // Call standard ISR too
+    uart0_status_isr();
 }
 
 void uart1_status_isr();  // Back reference to serial2.c
 void UART1TxStatus()
 {
-#ifndef IRQ_UART1_ERROR
-    if (uartInstances[1]->m_mode == TeensyDmx::Mode::DMX_IN)
-    {
-        if (UART1_S1 & UART_S1_FE)
-        {
-            (void) UART1_D;
-            uart1_status_isr();
-            uartInstances[1]->completeFrame();
-        }
-        else
-        {
-            uart1_status_isr();
-        }
+    if ((UART1_C2 & UART_C2_TCIE) && (UART1_S1 & UART_S1_TC)) {
+        // TX complete
+        uartInstances[1]->nextTx();
     }
-    else
-    {
-#endif
-        if ((UART1_C2 & UART_C2_TCIE) && (UART1_S1 & UART_S1_TC)) {
-            // TX complete
-            uartInstances[1]->nextTx();
-        }
-        // Call standard ISR too
-        uart1_status_isr();
-#ifndef IRQ_UART1_ERROR
-    }
-#endif
+    // Call standard ISR too
+    uart1_status_isr();
 }
 
 void uart2_status_isr();  // Back reference to serial3.c
 void UART2TxStatus()
 {
-#ifndef IRQ_UART2_ERROR
-    if (uartInstances[2]->m_mode == TeensyDmx::Mode::DMX_IN)
-    {
-        if (UART2_S1 & UART_S1_FE)
-        {
-            (void) UART2_D;
-            uart2_status_isr();
-            uartInstances[2]->completeFrame();
-        }
-        else
-        {
-            uart2_status_isr();
-        }
+    if ((UART2_C2 & UART_C2_TCIE) && (UART2_S1 & UART_S1_TC)) {
+        // TX complete
+        uartInstances[2]->nextTx();
     }
-    else
-    {
-#endif
-        if ((UART2_C2 & UART_C2_TCIE) && (UART2_S1 & UART_S1_TC)) {
-            // TX complete
-            uartInstances[2]->nextTx();
-        }
-        // Call standard ISR too
-        uart2_status_isr();
-#ifndef IRQ_UART2_ERROR
-    }
-#endif
+    // Call standard ISR too
+    uart2_status_isr();
 }
 
 #ifdef HAS_KINETISK_UART3
-void uart3_status_isr();  // Back reference to serial3.c
+void uart3_status_isr();  // Back reference to serial4.c
 void UART3TxStatus()
 {
     if ((UART3_C2 & UART_C2_TCIE) && (UART3_S1 & UART_S1_TC)) {
@@ -348,7 +288,7 @@ void UART3TxStatus()
 #endif
 
 #ifdef HAS_KINETISK_UART4
-void uart4_status_isr();  // Back reference to serial3.c
+void uart4_status_isr();  // Back reference to serial5.c
 void UART4TxStatus()
 {
     if ((UART4_C2 & UART_C2_TCIE) && (UART4_S1 & UART_S1_TC)) {
@@ -361,7 +301,7 @@ void UART4TxStatus()
 #endif
 
 #ifdef HAS_KINETISK_UART5
-void uart5_status_isr();  // Back reference to serial3.c
+void uart5_status_isr();  // Back reference to serial6.c
 void UART5TxStatus()
 {
     if ((UART5_C2 & UART_C2_TCIE) && (UART5_S1 & UART_S1_TC)) {
@@ -1043,6 +983,50 @@ void UART5RxError(void)
 }
 #endif
 
+#ifndef IRQ_UART0_ERROR
+void UART0RxStatus()
+{
+    if (UART0_S1 & UART_S1_FE)
+    {
+        (void) UART0_D;
+        uart0_status_isr();
+        uartInstances[0]->completeFrame();
+    }
+    else
+    {
+        uart0_status_isr();
+    }
+}
+
+void UART1RxStatus()
+{
+    if (UART1_S1 & UART_S1_FE)
+    {
+        (void) UART1_D;
+        uart1_status_isr();
+        uartInstances[1]->completeFrame();
+    }
+    else
+    {
+        uart1_status_isr();
+    }
+}
+
+void UART2RxStatus()
+{
+    if (UART2_S1 & UART_S1_FE)
+    {
+        (void) UART2_D;
+        uart2_status_isr();
+        uartInstances[2]->completeFrame();
+    }
+    else
+    {
+        uart2_status_isr();
+    }
+}
+#endif  // IRQ_UART0_ERROR
+
 void TeensyDmx::startReceive()
 {
     if (m_redePin != nullptr) {
@@ -1054,17 +1038,17 @@ void TeensyDmx::startReceive()
 
 #ifndef IRQ_UART0_ERROR
     if (&m_uart == &Serial1) {
-        // Change interrupt vector to mine to monitor TX complete
+        // Change interrupt vector to mine to monitor RX complete
         UART0_C3 |= UART_C3_FEIE;
-        attachInterruptVector(IRQ_UART0_STATUS, UART0TxStatus);
+        attachInterruptVector(IRQ_UART0_STATUS, UART0RxStatus);
     } else if (&m_uart == &Serial2) {
-        // Change interrupt vector to mine to monitor TX complete
+        // Change interrupt vector to mine to monitor RX complete
         UART1_C3 |= UART_C3_FEIE;
-        attachInterruptVector(IRQ_UART1_STATUS, UART1TxStatus);
+        attachInterruptVector(IRQ_UART1_STATUS, UART1RxStatus);
     } else if (&m_uart == &Serial3) {
-        // Change interrupt vector to mine to monitor TX complete
+        // Change interrupt vector to mine to monitor RX complete
         UART1_C3 |= UART_C3_FEIE;
-        attachInterruptVector(IRQ_UART2_STATUS, UART2TxStatus);
+        attachInterruptVector(IRQ_UART2_STATUS, UART2RxStatus);
     }
 #else
     if (&m_uart == &Serial1) {
