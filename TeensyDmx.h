@@ -142,6 +142,11 @@ class TeensyDmx
     struct RDMINIT *m_rdm;
     char m_deviceLabel[32];
     
+#ifndef IRQ_UART0_ERROR
+    friend void UART0RxStatus(void);
+    friend void UART1RxStatus(void);
+    friend void UART2RxStatus(void);
+#endif
     friend void UART0TxStatus(void);
     friend void UART1TxStatus(void);
     friend void UART2TxStatus(void);
