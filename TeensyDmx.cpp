@@ -28,8 +28,8 @@ struct RDMDATA
   byte     SourceID[6];
 
   byte     _TransNo;     // transaction number, not checked
-  byte     ResponseType;    // ResponseType
-  byte     _unknown;     // I don't know, ignore this
+  byte     ResponseType;    // ResponseType or PortID
+  byte     MessageCount;     // number of queued messages
   uint16_t SubDev;      // sub device number (root = 0)
   byte     CmdClass;     // command class
   uint16_t Parameter;	   // parameter ID
@@ -838,6 +838,7 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
 
     // no need to set these data fields:
     // StartCode, SubStartCode
+    rdm->MessageCount = 0; // Number of queued messages
     if (nackReason == NACK_WAS_ACK) {
         rdm->ResponseType = E120_RESPONSE_TYPE_ACK;
     } else {
