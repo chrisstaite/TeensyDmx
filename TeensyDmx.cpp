@@ -138,7 +138,7 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm) :
 {
     m_rdm = rdm;
 }
-    
+
 TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin) :
     TeensyDmx(uart, redePin)
 {
@@ -201,7 +201,7 @@ void TeensyDmx::setChannel(const uint16_t address, const uint8_t value)
 }
 
 void TeensyDmx::setChannels(
-        const uint16_t startAddress, 
+        const uint16_t startAddress,
         const uint8_t* values,
         const uint16_t length)
 {
@@ -439,7 +439,7 @@ void TeensyDmx::rdmUniqueBranch(const unsigned long timingStart, struct RDMDATA*
     if (memcmp(rdm->Data, _devID, sizeof(_devID)) <= 0 &&
             memcmp(_devID, rdm->Data+6, sizeof(_devID)) <= 0) {
         // I'm in range - say hello to the lovely controller
-    
+
         // respond a special discovery message !
         struct DISCOVERYMSG *disc = (struct DISCOVERYMSG*)(m_activeBuffer);
         uint16_t checksum = 6 * 0xFF;
@@ -458,7 +458,7 @@ void TeensyDmx::rdmUniqueBranch(const unsigned long timingStart, struct RDMDATA*
         disc->checksum[1] = (checksum >> 8)   | 0x55;
         disc->checksum[2] = (checksum & 0xFF) | 0xAA;
         disc->checksum[3] = (checksum & 0xFF) | 0x55;
-    
+
         // Send reply
         stopReceive();
         if (m_redePin != nullptr) {
@@ -1055,7 +1055,7 @@ void TeensyDmx::startReceive()
     if (&m_uart == &Serial1) {
         // Fire UART0 receive interrupt immediately after each byte received
         UART0_RWFIFO = 1;
-        
+
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1085,7 +1085,7 @@ void TeensyDmx::startReceive()
     } else if (&m_uart == &Serial3) {
         // Fire UART2 receive interrupt immediately after each byte received
         UART2_RWFIFO = 1;
-        
+
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1102,7 +1102,7 @@ void TeensyDmx::startReceive()
     else if (&m_uart == &Serial4) {
         // Fire UART3 receive interrupt immediately after each byte received
         UART3_RWFIFO = 1;
-        
+
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1120,7 +1120,7 @@ void TeensyDmx::startReceive()
     else if (&m_uart == &Serial5) {
         // Fire UART4 receive interrupt immediately after each byte received
         UART4_RWFIFO = 1;
-        
+
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1138,7 +1138,7 @@ void TeensyDmx::startReceive()
     else if (&m_uart == &Serial6) {
         // Fire UART5 receive interrupt immediately after each byte received
         UART5_RWFIFO = 1;
-        
+
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
