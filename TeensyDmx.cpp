@@ -1,4 +1,4 @@
-#include "teensydmx.h"
+#include "TeensyDmx.h"
 #include "rdm.h"
 
 static constexpr uint32_t BREAKSPEED = 100000;
