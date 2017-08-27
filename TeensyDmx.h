@@ -67,7 +67,7 @@ class TeensyDmx
     bool isIdentify() const;
     // Returns the user-set label of the device
     const char* getLabel() const;
-    
+
     // Use for transmit with addresses from 0-511
     // Will keep all other values as they were previously
     void setChannel(const uint16_t address, const uint8_t value);
@@ -91,7 +91,7 @@ class TeensyDmx
   private:
     TeensyDmx(const TeensyDmx&);
     TeensyDmx& operator=(const TeensyDmx&);
-    
+
     enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV };
     enum { DMX_BUFFER_SIZE = 512 };
 
@@ -99,14 +99,14 @@ class TeensyDmx
     void stopTransmit();
     void startReceive();
     void stopReceive();
-    
+
     void completeFrame();  // Called at error ISR during recv
     void processRDM();
     void respondMessage(unsigned long timingStart, uint16_t nackReason);
     void readBytes();  // Recv handler
 
     void nextTx();
-    
+
     // RDM handler functions
     void rdmUniqueBranch(const unsigned long timingStart, struct RDMDATA* rdm);
     void rdmUnmute(const unsigned long timingStart, struct RDMDATA* rdm);
@@ -123,9 +123,9 @@ class TeensyDmx
     void rdmGetSoftwareVersion(const unsigned long timingStart, struct RDMDATA* rdm);
     void rdmGetStartAddress(const unsigned long timingStart, struct RDMDATA* rdm);
     void rdmGetParameters(const unsigned long timingStart, struct RDMDATA* rdm);
-    
+
     HardwareSerial& m_uart;
-    
+
     volatile uint8_t m_dmxBuffer1[DMX_BUFFER_SIZE];
     volatile uint8_t m_dmxBuffer2[DMX_BUFFER_SIZE];
     volatile uint8_t *m_activeBuffer;
@@ -141,7 +141,7 @@ class TeensyDmx
     bool m_identifyMode;
     struct RDMINIT *m_rdm;
     char m_deviceLabel[32];
-    
+
 #ifndef IRQ_UART0_ERROR
     friend void UART0RxStatus(void);
     friend void UART1RxStatus(void);
