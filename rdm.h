@@ -551,7 +551,7 @@
 #define E120_PREFIX_MICRO                                0x04   /* Multiply by 10-6	                                            */
 #define E120_PREFIX_NANO                                 0x05   /* Multiply by 10-9	                                            */
 #define E120_PREFIX_PICO                                 0x06   /* Multiply by 10-12	                                        */
-#define E120_PREFIX_FEMPTO                               0x07   /* Multiply by 10-15	                                        */
+#define E120_PREFIX_FEMTO                                0x07   /* Multiply by 10-15	                                        */
 #define E120_PREFIX_ATTO                                 0x08   /* Multiply by 10-18	                                        */
 #define E120_PREFIX_ZEPTO                                0x09   /* Multiply by 10-21	                                        */
 #define E120_PREFIX_YOCTO                                0x0A   /* Multiply by 10-24	                                        */
@@ -560,7 +560,7 @@
 #define E120_PREFIX_KILO                                 0x13   /* Multiply by 10+3	                                            */
 #define E120_PREFIX_MEGA                                 0x14   /* Multiply by 10+6	                                            */
 #define E120_PREFIX_GIGA                                 0x15   /* Multiply by 10+9	                                            */
-#define E120_PREFIX_TERRA                                0x16   /* Multiply by 10+12	                                        */
+#define E120_PREFIX_TERA                                 0x16   /* Multiply by 10+12	                                        */
 #define E120_PREFIX_PETA                                 0x17   /* Multiply by 10+15	                                        */
 #define E120_PREFIX_EXA                                  0x18   /* Multiply by 10+18	                                        */
 #define E120_PREFIX_ZETTA                                0x19   /* Multiply by 10+21	                                        */
