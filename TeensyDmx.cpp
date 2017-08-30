@@ -1040,17 +1040,36 @@ void TeensyDmx::startReceive()
 #ifndef IRQ_UART0_ERROR
     if (&m_uart == &Serial1) {
         // Change interrupt vector to mine to monitor RX complete
+        // Fire UART0 receive interrupt immediately after each byte received
+        UART0_RWFIFO = 1;
+
+        // Enable UART0 interrupt on frame error and enable IRQ
         UART0_C3 |= UART_C3_FEIE;
+        NVIC_ENABLE_IRQ(IRQ_UART0_STATUS);
+
         attachInterruptVector(IRQ_UART0_STATUS, UART0RxStatus);
     } else if (&m_uart == &Serial2) {
         // Change interrupt vector to mine to monitor RX complete
+        // Fire UART1 receive interrupt immediately after each byte received
+        UART1_RWFIFO = 1;
+
+        // Enable UART0 interrupt on frame error and enable IRQ
         UART1_C3 |= UART_C3_FEIE;
+        NVIC_ENABLE_IRQ(IRQ_UART1_STATUS);
+
         attachInterruptVector(IRQ_UART1_STATUS, UART1RxStatus);
     } else if (&m_uart == &Serial3) {
         // Change interrupt vector to mine to monitor RX complete
-        UART1_C3 |= UART_C3_FEIE;
+        // Fire UART2 receive interrupt immediately after each byte received
+        UART2_RWFIFO = 1;
+
+        // Enable UART2 interrupt on frame error and enable IRQ
+        UART2_C3 |= UART_C3_FEIE;
+        NVIC_ENABLE_IRQ(IRQ_UART2_STATUS);
+
         attachInterruptVector(IRQ_UART2_STATUS, UART2RxStatus);
     }
+    // TODO: Does this need to handle Serial4-6 here too?
 #else
     if (&m_uart == &Serial1) {
         // Fire UART0 receive interrupt immediately after each byte received
@@ -1164,13 +1183,16 @@ void TeensyDmx::stopReceive()
 
 #ifndef IRQ_UART0_ERROR
     if (&m_uart == &Serial1) {
-        UART1_C3 &= ~UART_C3_FEIE;
+        UART0_RWFIFO = 0;
+        UART0_C3 &= ~UART_C3_FEIE;
         attachInterruptVector(IRQ_UART0_STATUS, uart0_status_isr);
     } else if (&m_uart == &Serial2) {
+        UART1_RWFIFO = 0;
         UART1_C3 &= ~UART_C3_FEIE;
         attachInterruptVector(IRQ_UART1_STATUS, uart1_status_isr);
     } else if (&m_uart == &Serial3) {
-        UART1_C3 &= ~UART_C3_FEIE;
+        UART2_RWFIFO = 0;
+        UART2_C3 &= ~UART_C3_FEIE;
         attachInterruptVector(IRQ_UART2_STATUS, uart2_status_isr);
     }
 #else
