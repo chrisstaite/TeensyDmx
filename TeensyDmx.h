@@ -34,6 +34,62 @@
 #define UART_C3_FEIE    (uint8_t)0x02   // Framing Error Interrupt Enable
 #endif
 
+// ----- macros -----
+
+// 16-bit and 32-bit integers in the RDM protocol are transmitted highbyte - lowbyte.
+// but the ATMEGA processors store them in highbyte - lowbyte order.
+// Use SWAPINT to swap the 2 bytes of an 16-bit int to match the byte order on the DMX Protocol.
+// avoid using this macro on variables but use it on the constant definitions.
+#define SWAPINT(i) (((i&0x00FF)<<8) | ((i&0xFF00)>>8))
+// Use SWAPINT32 to swap the 4 bytes of a 32-bit int to match the byte order on the DMX Protocol.
+#define SWAPINT32(i) ((i&0x000000ff)<<24) | ((i&0x0000ff00)<<8) | ((i&0x00ff0000)>>8) | ((i&0xff000000)>>24)
+
+// read a 16 bit number from a data buffer location
+#define READINT(p) ((p[0]<<8) | (p[1]))
+
+enum { DMX_BUFFER_SIZE = 512 };
+enum { RDM_BUFFER_SIZE = (24+231) }; //TODO(Peter): Check me
+
+struct RDMDATA
+{
+  byte     StartCode;    // Start Code 0xCC for RDM
+  byte     SubStartCode; // Start Code 0x01 for RDM
+  byte     Length;       // packet length
+  byte     DestID[6];
+  byte     SourceID[6];
+
+  byte     _TransNo;     // transaction number, not checked
+  byte     ResponseType;    // ResponseType or PortID
+  byte     MessageCount;     // number of queued messages
+  uint16_t SubDev;      // sub device number (root = 0)
+  byte     CmdClass;     // command class
+  uint16_t Parameter;	   // parameter ID
+  byte     DataLength;   // parameter data length in bytes
+  byte     Data[231];   // data byte field
+} __attribute__((__packed__)); // struct RDMDATA
+
+// the special discovery response message
+struct DISCOVERYMSG
+{
+  byte headerFE[7];
+  byte headerAA;
+  byte maskedDevID[12];
+  byte checksum[4];
+} __attribute__((__packed__)); // struct DISCOVERYMSG
+
+// The buffer for RDM packets being received and sent.
+// this structure is needed to seperate RDM data from DMX data.
+union RDMMSG {
+  // the most common RDM packet layout for commands
+  struct RDMDATA packet;
+
+  // the layout of the RDM packet when returning a discovery message
+  struct DISCOVERYMSG discovery;
+
+  // the byte array used while receiving and sending.
+  byte buffer[RDM_BUFFER_SIZE];
+} __attribute__((__packed__)); // union RDMMEM
+
 struct RDMINIT
 {
     const char *softwareLabel;
@@ -92,8 +148,7 @@ class TeensyDmx
     TeensyDmx(const TeensyDmx&);
     TeensyDmx& operator=(const TeensyDmx&);
 
-    enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV };
-    enum { DMX_BUFFER_SIZE = 512 };
+    enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV, RDM_RECV_CHECKSUM_HI, RDM_RECV_CHECKSUM_LO, RDM_COMPLETE };
 
     void startTransmit();
     void stopTransmit();
@@ -108,21 +163,20 @@ class TeensyDmx
     void nextTx();
 
     // RDM handler functions
-    void rdmUniqueBranch(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmUnmute(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmMute(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmSetIdentify(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmSetDeviceLabel(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmSetStartAddress(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmSetParameters(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmGetIdentify(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmGetDeviceInfo(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmGetManufacturerLabel(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmGetModelDescription(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmGetDeviceLabel(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmGetSoftwareVersion(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmGetStartAddress(const unsigned long timingStart, struct RDMDATA* rdm);
-    void rdmGetParameters(const unsigned long timingStart, struct RDMDATA* rdm);
+    void rdmUniqueBranch(struct RDMDATA* rdm);
+    uint16_t rdmUnmute(struct RDMDATA* rdm);
+    uint16_t rdmMute(struct RDMDATA* rdm);
+    uint16_t rdmSetIdentify(struct RDMDATA* rdm);
+    uint16_t rdmSetDeviceLabel(struct RDMDATA* rdm);
+    uint16_t rdmSetStartAddress(struct RDMDATA* rdm);
+    uint16_t rdmGetIdentify(struct RDMDATA* rdm);
+    uint16_t rdmGetDeviceInfo(struct RDMDATA* rdm);
+    uint16_t rdmGetManufacturerLabel(struct RDMDATA* rdm);
+    uint16_t rdmGetModelDescription(struct RDMDATA* rdm);
+    uint16_t rdmGetDeviceLabel(struct RDMDATA* rdm);
+    uint16_t rdmGetSoftwareVersion(struct RDMDATA* rdm);
+    uint16_t rdmGetStartAddress(struct RDMDATA* rdm);
+    uint16_t rdmGetParameters(struct RDMDATA* rdm);
 
     HardwareSerial& m_uart;
 
@@ -140,6 +194,7 @@ class TeensyDmx
     bool m_rdmMute;
     bool m_identifyMode;
     struct RDMINIT *m_rdm;
+    union RDMMSG m_rdmBuffer;
     char m_deviceLabel[32];
 
 #ifndef IRQ_UART0_ERROR

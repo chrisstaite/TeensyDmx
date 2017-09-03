@@ -9,7 +9,7 @@ struct RDMINIT rdmData {
   1,  // Device ID
   "DMX Node",
   1,  // The DMX footprint
-  0,  // The DMX startAddress - only used for RDM
+  1,  // The DMX startAddress - only used for RDM
   0,  // Additional commands length for RDM
   0   // Definition of additional commands
 };
