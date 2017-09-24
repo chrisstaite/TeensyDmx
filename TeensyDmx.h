@@ -48,7 +48,7 @@
 #define READINT(p) ((p[0]<<8) | (p[1]))
 
 enum { DMX_BUFFER_SIZE = 512 };
-enum { RDM_BUFFER_SIZE = (24+231) }; //TODO(Peter): Check me
+enum { RDM_BUFFER_SIZE = (24+231) };  // base packet + param data (no checksum)
 
 struct RDMDATA
 {
