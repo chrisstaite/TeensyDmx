@@ -473,7 +473,7 @@ uint16_t TeensyDmx::rdmUnmute(struct RDMDATA* rdm)
         rdm->DataLength = 2;
         return NACK_WAS_ACK;
     } else {
-        return E120_NR_FORMAT_ERROR;;
+        return E120_NR_FORMAT_ERROR;
     }
 }
 
@@ -487,7 +487,7 @@ uint16_t TeensyDmx::rdmMute(struct RDMDATA* rdm)
         rdm->DataLength = 2;
         return NACK_WAS_ACK;
     } else {
-        return E120_NR_FORMAT_ERROR;;
+        return E120_NR_FORMAT_ERROR;
     }
 }
 
@@ -709,12 +709,6 @@ void TeensyDmx::processRDM()
 {
     uint16_t nackReason = E120_NR_UNKNOWN_PID;
 
-    // Serial.println("Processing RDM packet");
-    // for (unsigned int i = 0; i < (m_rdmBuffer.packet.Length + 2); i++) {
-    //     Serial.print(m_rdmBuffer.buffer[i],HEX);
-    //     Serial.print(" ");
-    // }
-    // Serial.println("");
     m_state = IDLE;
     unsigned long timingStart = micros();
     struct RDMDATA* rdm = (struct RDMDATA*)(&m_rdmBuffer.packet);
