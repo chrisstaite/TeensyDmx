@@ -209,7 +209,7 @@ void TeensyDmx::nextTx()
             m_dmxBufferIndex = 0;
         } else {
             m_uart.write(m_activeBuffer[m_dmxBufferIndex]);
-            m_dmxBufferIndex++;
+            ++m_dmxBufferIndex;
         }
     }
 }
@@ -387,7 +387,7 @@ void TeensyDmx::completeFrame()
         case State::DMX_RECV:
         case State::DMX_COMPLETE:
             // Update frame count and swap buffers
-            m_frameCount++;
+            ++m_frameCount;
             if (m_activeBuffer == m_dmxBuffer1) {
                 m_activeBuffer = m_dmxBuffer2;
                 m_inactiveBuffer = m_dmxBuffer1;
@@ -433,11 +433,11 @@ void TeensyDmx::rdmUniqueBranch(struct RDMDATA* rdm)
         uint16_t checksum = 6 * 0xFF;
 
         // fill in the _rdm.discovery response structure
-        for (byte i = 0; i < 7; i++) {
+        for (byte i = 0; i < 7; ++i) {
             disc->headerFE[i] = 0xFE;
         }
         disc->headerAA = 0xAA;
-        for (byte i = 0; i < 6; i++) {
+        for (byte i = 0; i < 6; ++i) {
             disc->maskedDevID[i+i]   = _devID[i] | 0xAA;
             disc->maskedDevID[i+i+1] = _devID[i] | 0x55;
             checksum += _devID[i];
@@ -588,7 +588,7 @@ uint16_t TeensyDmx::rdmGetDeviceInfo(struct RDMDATA* rdm)
             putInt(&devInfo->footprint, 0, m_rdm->footprint);
         }
 
-        rdm->DataLength = sizeof(DEVICEINFO);
+        rdm->DataLength = sizeof(struct DEVICEINFO);
         return NACK_WAS_ACK;
     }
 }
@@ -852,7 +852,7 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
     // Parameter
 
     // prepare buffer and Checksum
-    for (i = 0; i < rdm->Length; i++) {
+    for (i = 0; i < rdm->Length; ++i) {
         checkSum += m_rdmBuffer.buffer[i];
     }
 
@@ -1249,7 +1249,7 @@ void TeensyDmx::readBytes()
                     case E120_SC_RDM:
                         m_dmxBufferIndex = 0;
                         m_rdmBuffer.buffer[m_dmxBufferIndex] = E120_SC_RDM;
-                        m_dmxBufferIndex++;
+                        ++m_dmxBufferIndex;
                         m_state = State::RDM_RECV;
                         break;
                     default:
@@ -1272,23 +1272,22 @@ void TeensyDmx::readBytes()
                     m_state = State::RDM_RECV_CHECKSUM_HI;
                 }
 
-                m_dmxBufferIndex++;
+                ++m_dmxBufferIndex;
 
                 break;
             case State::RDM_RECV_CHECKSUM_HI:
                 m_rdmBuffer.buffer[m_dmxBufferIndex] = m_uart.read();
-                m_dmxBufferIndex++;
+                ++m_dmxBufferIndex;
                 m_state = State::RDM_RECV_CHECKSUM_LO;
                 break;
             case State::RDM_RECV_CHECKSUM_LO:
                 m_rdmBuffer.buffer[m_dmxBufferIndex] = m_uart.read();
-                m_dmxBufferIndex++;
+                ++m_dmxBufferIndex;
                 m_state = State::RDM_COMPLETE;
                 break;
             case State::DMX_RECV:
                 m_activeBuffer[m_dmxBufferIndex] = m_uart.read();
-
-                m_dmxBufferIndex++;
+                ++m_dmxBufferIndex;
 
                 if (m_dmxBufferIndex >= DMX_BUFFER_SIZE) {
                     if (m_state == State::DMX_RECV) {
