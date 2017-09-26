@@ -150,6 +150,15 @@ const volatile uint8_t* TeensyDmx::getBuffer() const
     return m_inactiveBuffer;
 }
 
+uint8_t TeensyDmx::getChannel(const uint16_t address, const uint8_t value)
+{
+    if (address < DMX_BUFFER_SIZE) {
+        return m_inactiveBuffer[address];
+    } else {
+        return 0;
+    }
+}
+
 bool TeensyDmx::isIdentify() const
 {
     return m_identifyMode;
