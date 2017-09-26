@@ -120,13 +120,18 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin)
 
 const volatile uint8_t* TeensyDmx::getBuffer() const
 {
-    return m_inactiveBuffer;
+    if (m_mode == DMX_IN) {
+        // DMX Rx is double buffered due to the interupt handler
+        return m_inactiveBuffer;
+    } else {
+        return m_activeBuffer;
+    }
 }
 
 uint8_t TeensyDmx::getChannel(const uint16_t address, const uint8_t value)
 {
     if (address < DMX_BUFFER_SIZE) {
-        return m_inactiveBuffer[address];
+        return getBuffer()[address];
     } else {
         return 0;
     }
