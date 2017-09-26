@@ -70,14 +70,14 @@ enum { DMX_BUFFER_SIZE = 512 };
 enum { RDM_BUFFER_SIZE = sizeof(RDMDATA) };  // base packet + param data (no checksum)
 
 // the special discovery response message
-struct DISCOVERYMSG
+struct DISC_UNIQUE_BRANCH_RESPONSE
 {
   byte headerFE[7];
   byte headerAA;
   byte maskedDevID[12];
   byte checksum[4];
-} __attribute__((__packed__)); // struct DISCOVERYMSG
-static_assert((sizeof(DISCOVERYMSG)==24), "Invalid size for DISCOVERYMSG struct, is it packed?");
+} __attribute__((__packed__)); // struct DISC_UNIQUE_BRANCH_RESPONSE
+static_assert((sizeof(DISC_UNIQUE_BRANCH_RESPONSE)==24), "Invalid size for DISC_UNIQUE_BRANCH_RESPONSE struct, is it packed?");
 
 // The buffer for RDM packets being received and sent.
 // this structure is needed to seperate RDM data from DMX data.
@@ -85,8 +85,8 @@ union RDMMSG {
   // the most common RDM packet layout for commands
   struct RDMDATA packet;
 
-  // the layout of the RDM packet when returning a discovery message
-  struct DISCOVERYMSG discovery;
+  // the layout of the RDM packet when sending a DUB response
+  struct DISC_UNIQUE_BRANCH_RESPONSE discovery;
 
   // the byte array used while receiving and sending.
   byte buffer[RDM_BUFFER_SIZE];
@@ -165,20 +165,20 @@ class TeensyDmx
     void nextTx();
 
     // RDM handler functions
-    void rdmUniqueBranch(struct RDMDATA* rdm);
-    uint16_t rdmUnmute(struct RDMDATA* rdm);
-    uint16_t rdmMute(struct RDMDATA* rdm);
-    uint16_t rdmSetIdentify(struct RDMDATA* rdm);
+    void rdmDiscUniqueBranch(struct RDMDATA* rdm);
+    uint16_t rdmDiscUnMute(struct RDMDATA* rdm);
+    uint16_t rdmDiscMute(struct RDMDATA* rdm);
+    uint16_t rdmSetIdentifyDevice(struct RDMDATA* rdm);
     uint16_t rdmSetDeviceLabel(struct RDMDATA* rdm);
-    uint16_t rdmSetStartAddress(struct RDMDATA* rdm);
-    uint16_t rdmGetIdentify(struct RDMDATA* rdm);
+    uint16_t rdmSetDMXStartAddress(struct RDMDATA* rdm);
+    uint16_t rdmGetIdentifyDevice(struct RDMDATA* rdm);
     uint16_t rdmGetDeviceInfo(struct RDMDATA* rdm);
     uint16_t rdmGetManufacturerLabel(struct RDMDATA* rdm);
-    uint16_t rdmGetModelDescription(struct RDMDATA* rdm);
+    uint16_t rdmGetDeviceModelDescription(struct RDMDATA* rdm);
     uint16_t rdmGetDeviceLabel(struct RDMDATA* rdm);
-    uint16_t rdmGetSoftwareVersion(struct RDMDATA* rdm);
-    uint16_t rdmGetStartAddress(struct RDMDATA* rdm);
-    uint16_t rdmGetParameters(struct RDMDATA* rdm);
+    uint16_t rdmGetSoftwareVersionLabel(struct RDMDATA* rdm);
+    uint16_t rdmGetDMXStartAddress(struct RDMDATA* rdm);
+    uint16_t rdmGetSupportedParameters(struct RDMDATA* rdm);
 
     uint16_t rdmCalculateChecksum(uint8_t* data, uint8_t length);
 
