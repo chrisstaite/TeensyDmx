@@ -35,6 +35,7 @@ struct DEVICEINFO
   uint16_t subDeviceCount;
   byte sensorCount;
 } __attribute__((__packed__)); // struct DEVICEINFO
+static_assert((sizeof(DEVICEINFO)==19), "Invalid size for DEVICEINFO struct, is it packed?");
 
 #if defined(HAS_KINETISK_UART5)
 // Instance for UART0, UART1, UART2, UART3, UART4, UART5
@@ -429,8 +430,6 @@ void TeensyDmx::rdmUniqueBranch(struct RDMDATA* rdm)
 
         // respond a special discovery message !
         struct DISCOVERYMSG *disc = (struct DISCOVERYMSG*)(&m_rdmBuffer.discovery);
-        // TODO(Peter): Fix checksum calculation
-        uint16_t checksum = 6 * 0xFF;
 
         // fill in the _rdm.discovery response structure
         for (byte i = 0; i < 7; ++i) {
@@ -440,8 +439,10 @@ void TeensyDmx::rdmUniqueBranch(struct RDMDATA* rdm)
         for (byte i = 0; i < 6; ++i) {
             disc->maskedDevID[i+i]   = _devID[i] | 0xAA;
             disc->maskedDevID[i+i+1] = _devID[i] | 0x55;
-            checksum += _devID[i];
         }
+
+        uint16_t checksum = rdmCalculateChecksum(disc->maskedDevID, sizeof(disc->maskedDevID));
+
         disc->checksum[0] = (checksum >> 8)   | 0xAA;
         disc->checksum[1] = (checksum >> 8)   | 0x55;
         disc->checksum[2] = (checksum & 0xFF) | 0xAA;
@@ -455,7 +456,7 @@ void TeensyDmx::rdmUniqueBranch(struct RDMDATA* rdm)
         m_dmxBufferIndex = 0;
         // No break for DUB
         m_uart.begin(DMXSPEED, DMXFORMAT);
-        for (uint16_t i = 0; i < sizeof(struct DISCOVERYMSG); ++i) {
+        for (uint16_t i = 0; i < sizeof(DISCOVERYMSG); ++i) {
             m_uart.write(m_rdmBuffer.buffer[i]);
             m_uart.flush();
         }
@@ -588,7 +589,7 @@ uint16_t TeensyDmx::rdmGetDeviceInfo(struct RDMDATA* rdm)
             putInt(&devInfo->footprint, 0, m_rdm->footprint);
         }
 
-        rdm->DataLength = sizeof(struct DEVICEINFO);
+        rdm->DataLength = sizeof(DEVICEINFO);
         return NACK_WAS_ACK;
     }
 }
@@ -703,6 +704,19 @@ uint16_t TeensyDmx::rdmGetParameters(struct RDMDATA* rdm)
         putInt(rdm->Data, 4, E120_DEVICE_LABEL);
         return NACK_WAS_ACK;
     }
+}
+
+uint16_t TeensyDmx::rdmCalculateChecksum(uint8_t* data, uint8_t length)
+{
+    uint16_t checksum = 0;
+
+    // calculate checksum
+    for (unsigned int i = 0; i < length; ++i) {
+        checksum += *data;
+        ++data;
+    }
+
+    return checksum;
 }
 
 void TeensyDmx::processRDM()
@@ -821,8 +835,6 @@ void TeensyDmx::processRDM()
 void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
 {
 
-    uint16_t i;
-    uint16_t checkSum = 0;
     struct RDMDATA* rdm = (struct RDMDATA*)(&m_rdmBuffer.packet);
 
     // TIMING: don't send too fast, min: 176 microseconds
@@ -839,8 +851,7 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
     } else {
         rdm->ResponseType = E120_RESPONSE_TYPE_NACK_REASON;
         rdm->DataLength = 2;
-        rdm->Data[0] = (nackReason >> 8) & 0xFF;
-        rdm->Data[1] = nackReason & 0xFF;
+        putInt(&rdm->Data, 0, nackReason);
     }
     rdm->Length = rdm->DataLength + 24; // total packet length
 
@@ -851,10 +862,7 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
     ++(rdm->CmdClass);
     // Parameter
 
-    // prepare buffer and Checksum
-    for (i = 0; i < rdm->Length; ++i) {
-        checkSum += m_rdmBuffer.buffer[i];
-    }
+    uint16_t checkSum = rdmCalculateChecksum(m_rdmBuffer.buffer, rdm->Length);
 
     // Send reply
     stopReceive();
@@ -1263,27 +1271,36 @@ void TeensyDmx::readBytes()
 
                 if (m_dmxBufferIndex >= RDM_BUFFER_SIZE) {
                     if (m_state == State::RDM_RECV) {
-                        m_state = State::RDM_COMPLETE;
+                        m_state = State::RDM_RECV_CHECKSUM_HI;
                     } else {
                         m_state = State::IDLE;  // Buffer full
                     }
-                } else if ((m_dmxBufferIndex >= 2) && ((m_dmxBufferIndex + 1) >= m_rdmBuffer.packet.Length)) {
-                    // Got expected packet length, need checksum
-                    m_state = State::RDM_RECV_CHECKSUM_HI;
+                } else if (m_dmxBufferIndex >= 2) {
+                    // Got enough data to have packet length
+                    if ((m_dmxBufferIndex + 1) >= m_rdmBuffer.packet.Length) {
+                        // Got expected packet length, need checksum
+                        m_state = State::RDM_RECV_CHECKSUM_HI;
+                    } else {
+                        if (m_rdmBuffer.packet.SubStartCode != E120_SC_SUB_MESSAGE) {
+                            m_state = State::IDLE;  // Invalid RDM packet
+                        }
+                    }
                 }
 
                 ++m_dmxBufferIndex;
 
                 break;
             case State::RDM_RECV_CHECKSUM_HI:
-                m_rdmBuffer.buffer[m_dmxBufferIndex] = m_uart.read();
-                ++m_dmxBufferIndex;
+                m_rdmChecksum = (m_uart.read() << 8);
                 m_state = State::RDM_RECV_CHECKSUM_LO;
                 break;
             case State::RDM_RECV_CHECKSUM_LO:
-                m_rdmBuffer.buffer[m_dmxBufferIndex] = m_uart.read();
-                ++m_dmxBufferIndex;
-                m_state = State::RDM_COMPLETE;
+                m_rdmChecksum = (m_rdmChecksum | m_uart.read());
+                if (m_rdmChecksum == rdmCalculateChecksum(m_rdmBuffer.buffer, m_rdmBuffer.packet.Length)) {
+                    m_state = State::RDM_COMPLETE;
+                } else {
+                    m_state = State::IDLE;  // Invalid RDM checksum
+                }
                 break;
             case State::DMX_RECV:
                 m_activeBuffer[m_dmxBufferIndex] = m_uart.read();

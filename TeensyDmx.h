@@ -47,13 +47,10 @@
 // read a 16 bit number from a data buffer location
 #define READINT(p) ((p[0]<<8) | (p[1]))
 
-enum { DMX_BUFFER_SIZE = 512 };
-enum { RDM_BUFFER_SIZE = (24+231) };  // base packet + param data (no checksum)
-
 struct RDMDATA
 {
   byte     StartCode;    // Start Code 0xCC for RDM
-  byte     SubStartCode; // Start Code 0x01 for RDM
+  byte     SubStartCode; // Sub Start Code 0x01 for RDM
   byte     Length;       // packet length
   byte     DestID[6];
   byte     SourceID[6];
@@ -67,6 +64,10 @@ struct RDMDATA
   byte     DataLength;   // parameter data length in bytes
   byte     Data[231];   // data byte field
 } __attribute__((__packed__)); // struct RDMDATA
+static_assert((sizeof(RDMDATA)==255), "Invalid size for RDMDATA struct, is it packed?");
+
+enum { DMX_BUFFER_SIZE = 512 };
+enum { RDM_BUFFER_SIZE = sizeof(RDMDATA) };  // base packet + param data (no checksum)
 
 // the special discovery response message
 struct DISCOVERYMSG
@@ -76,6 +77,7 @@ struct DISCOVERYMSG
   byte maskedDevID[12];
   byte checksum[4];
 } __attribute__((__packed__)); // struct DISCOVERYMSG
+static_assert((sizeof(DISCOVERYMSG)==24), "Invalid size for DISCOVERYMSG struct, is it packed?");
 
 // The buffer for RDM packets being received and sent.
 // this structure is needed to seperate RDM data from DMX data.
@@ -178,6 +180,8 @@ class TeensyDmx
     uint16_t rdmGetStartAddress(struct RDMDATA* rdm);
     uint16_t rdmGetParameters(struct RDMDATA* rdm);
 
+    uint16_t rdmCalculateChecksum(uint8_t* data, uint8_t length);
+
     HardwareSerial& m_uart;
 
     volatile uint8_t m_dmxBuffer1[DMX_BUFFER_SIZE];
@@ -195,6 +199,7 @@ class TeensyDmx
     bool m_identifyMode;
     struct RDMINIT *m_rdm;
     union RDMMSG m_rdmBuffer;
+    uint16_t m_rdmChecksum;
     char m_deviceLabel[32];
 
 #ifndef IRQ_UART0_ERROR
