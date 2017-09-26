@@ -19,6 +19,7 @@ byte DMXVal[] = {50};
 TeensyDmx Dmx(Serial1, &rdmData, DMX_REDE);
 
 void setup() {
+  Serial.begin(9600);
   Dmx.setMode(TeensyDmx::DMX_IN);
 }
 
