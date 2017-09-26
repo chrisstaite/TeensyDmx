@@ -149,6 +149,9 @@ const char* TeensyDmx::getLabel() const
 
 void TeensyDmx::setMode(TeensyDmx::Mode mode)
 {
+    // Stop what we were doing
+    m_state = IDLE;
+
     switch (m_mode)
     {
         case DMX_IN:
