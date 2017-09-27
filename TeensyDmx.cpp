@@ -9,7 +9,7 @@ static constexpr uint32_t DMXFORMAT = SERIAL_8N2;
 static constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
 
 // It was an easy job to register a manufacturer id to myself as explained
-// on http://tsp.plasa.org/tsp/working_groups/CP/mfctrIDs.php.
+// on http://tsp.esta.org/tsp/working_groups/CP/mfctrIDs.php.
 // The ID below is designated as a prototyping ID.
 static constexpr byte _devID[] = { 0x7f, 0xf0, 0x20, 0x12, 0x00, 0x00 };
 
@@ -19,9 +19,9 @@ static constexpr byte _devIDGroup[] = { 0x7f, 0xf0, 0xFF, 0xFF, 0xFF, 0xFF };
 // The Device ID for adressing all devices: 6 times 0xFF.
 static constexpr byte _devIDAll[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
-// The DEVICE_INFO_RESPONSE structure (length = 19) has to be responsed for E120_DEVICE_INFO
+// The DEVICE_INFO_GET_RESPONSE structure (length = 19) has to be responsed for E120_DEVICE_INFO
 // See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=96
-struct DEVICE_INFO_RESPONSE
+struct DEVICE_INFO_GET_RESPONSE
 {
   byte protocolMajor;
   byte protocolMinor;
@@ -34,8 +34,8 @@ struct DEVICE_INFO_RESPONSE
   uint16_t startAddress;
   uint16_t subDeviceCount;
   byte sensorCount;
-} __attribute__((__packed__)); // struct DEVICE_INFO_RESPONSE
-static_assert((sizeof(DEVICE_INFO_RESPONSE)==19), "Invalid size for DEVICE_INFO_RESPONSE struct, is it packed?");
+} __attribute__((__packed__)); // struct DEVICE_INFO_GET_RESPONSE
+static_assert((sizeof(DEVICE_INFO_GET_RESPONSE)==19), "Invalid size for DEVICE_INFO_GET_RESPONSE struct, is it packed?");
 
 #if defined(HAS_KINETISK_UART5)
 // Instance for UART0, UART1, UART2, UART3, UART4, UART5
@@ -421,32 +421,34 @@ void TeensyDmx::rdmDiscUniqueBranch(struct RDMDATA* rdm)
 {
     if (m_rdmMute) return;
 
-    if (rdm->Length != 36) return;
-    if (rdm->DataLength != 12) return;
+    if (rdm->Length != (RDM_PACKET_SIZE_NO_PD + sizeof(DISC_UNIQUE_BRANCH_REQUEST))) return;
+    if (rdm->DataLength != sizeof(DISC_UNIQUE_BRANCH_REQUEST)) return;
 
-    if (memcmp(rdm->Data, _devID, sizeof(_devID)) <= 0 &&
-            memcmp(_devID, rdm->Data+6, sizeof(_devID)) <= 0) {
+    DISC_UNIQUE_BRANCH_REQUEST *dub_request = (DISC_UNIQUE_BRANCH_REQUEST *)(rdm->Data);
+
+    if (memcmp(dub_request->lowerBoundUID, _devID, sizeof(_devID)) <= 0 &&
+            memcmp(_devID, dub_request->upperBoundUID, sizeof(_devID)) <= 0) {
         // I'm in range - say hello to the lovely controller
 
         // respond with the special discovery message !
-        struct DISC_UNIQUE_BRANCH_RESPONSE *disc = (struct DISC_UNIQUE_BRANCH_RESPONSE*)(&m_rdmBuffer.discovery);
+        struct DISC_UNIQUE_BRANCH_RESPONSE *dub_response = (struct DISC_UNIQUE_BRANCH_RESPONSE*)(&m_rdmBuffer.discovery);
 
         // fill in the discovery response structure
         for (byte i = 0; i < 7; ++i) {
-            disc->headerFE[i] = 0xFE;
+            dub_response->headerFE[i] = 0xFE;
         }
-        disc->headerAA = 0xAA;
+        dub_response->headerAA = 0xAA;
         for (byte i = 0; i < 6; ++i) {
-            disc->maskedDevID[i+i]   = _devID[i] | 0xAA;
-            disc->maskedDevID[i+i+1] = _devID[i] | 0x55;
+            dub_response->maskedDevID[i+i]   = _devID[i] | 0xAA;
+            dub_response->maskedDevID[i+i+1] = _devID[i] | 0x55;
         }
 
-        uint16_t checksum = rdmCalculateChecksum(disc->maskedDevID, sizeof(disc->maskedDevID));
+        uint16_t checksum = rdmCalculateChecksum(dub_response->maskedDevID, sizeof(dub_response->maskedDevID));
 
-        disc->checksum[0] = (checksum >> 8)   | 0xAA;
-        disc->checksum[1] = (checksum >> 8)   | 0x55;
-        disc->checksum[2] = (checksum & 0xFF) | 0xAA;
-        disc->checksum[3] = (checksum & 0xFF) | 0x55;
+        dub_response->checksum[0] = (checksum >> 8)   | 0xAA;
+        dub_response->checksum[1] = (checksum >> 8)   | 0x55;
+        dub_response->checksum[2] = (checksum & 0xFF) | 0xAA;
+        dub_response->checksum[3] = (checksum & 0xFF) | 0x55;
 
         // Send reply
         stopReceive();
@@ -528,7 +530,7 @@ uint16_t TeensyDmx::rdmSetDMXStartAddress(struct RDMDATA* rdm)
         // Oversized data
         return E120_NR_FORMAT_ERROR;
     } else {
-        uint16_t newStartAddress = (rdm->Data[0] << 8) | (rdm->Data[1]);
+        uint16_t newStartAddress = READINT(rdm->Data);
         if ((newStartAddress <= 0) || (newStartAddress > DMX_BUFFER_SIZE)) {
             // Out of range start address
             return E120_NR_DATA_OUT_OF_RANGE;
@@ -569,7 +571,7 @@ uint16_t TeensyDmx::rdmGetDeviceInfo(struct RDMDATA* rdm)
     } else {
         // return all device info data
         // The data has to be responsed in the Data buffer.
-        DEVICE_INFO_RESPONSE *devInfo = (DEVICE_INFO_RESPONSE *)(rdm->Data);
+        DEVICE_INFO_GET_RESPONSE *devInfo = (DEVICE_INFO_GET_RESPONSE *)(rdm->Data);
 
         devInfo->protocolMajor = 1;
         devInfo->protocolMinor = 0;
@@ -589,7 +591,7 @@ uint16_t TeensyDmx::rdmGetDeviceInfo(struct RDMDATA* rdm)
             putInt(&devInfo->footprint, 0, m_rdm->footprint);
         }
 
-        rdm->DataLength = sizeof(DEVICE_INFO_RESPONSE);
+        rdm->DataLength = sizeof(DEVICE_INFO_GET_RESPONSE);
         return NACK_WAS_ACK;
     }
 }

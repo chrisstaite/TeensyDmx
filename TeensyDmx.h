@@ -47,13 +47,17 @@
 // read a 16 bit number from a data buffer location
 #define READINT(p) ((p[0]<<8) | (p[1]))
 
+enum { DMX_BUFFER_SIZE = 512 };
+enum { RDM_UID_LENGTH = 6 };
+enum { RDM_MAX_PARAMETER_DATA_LENGTH = 231 };
+
 struct RDMDATA
 {
   byte     StartCode;    // Start Code 0xCC for RDM
   byte     SubStartCode; // Sub Start Code 0x01 for RDM
   byte     Length;       // packet length
-  byte     DestID[6];
-  byte     SourceID[6];
+  byte     DestID[RDM_UID_LENGTH];
+  byte     SourceID[RDM_UID_LENGTH];
 
   byte     _TransNo;     // transaction number, not checked
   byte     ResponseType;    // ResponseType or PortID
@@ -62,12 +66,20 @@ struct RDMDATA
   byte     CmdClass;     // command class
   uint16_t Parameter;	   // parameter ID
   byte     DataLength;   // parameter data length in bytes
-  byte     Data[231];   // data byte field
+  byte     Data[RDM_MAX_PARAMETER_DATA_LENGTH];   // data byte field
 } __attribute__((__packed__)); // struct RDMDATA
 static_assert((sizeof(RDMDATA)==255), "Invalid size for RDMDATA struct, is it packed?");
 
-enum { DMX_BUFFER_SIZE = 512 };
 enum { RDM_BUFFER_SIZE = sizeof(RDMDATA) };  // base packet + param data (no checksum)
+enum { RDM_PACKET_SIZE_NO_PD = (sizeof(RDMDATA) - RDM_MAX_PARAMETER_DATA_LENGTH) };
+static_assert((RDM_PACKET_SIZE_NO_PD==24), "Invalid size for RDM packet without parameter data");
+
+struct DISC_UNIQUE_BRANCH_REQUEST
+{
+  byte lowerBoundUID[RDM_UID_LENGTH];
+  byte upperBoundUID[RDM_UID_LENGTH];
+} __attribute__((__packed__)); // struct DISC_UNIQUE_BRANCH_REQUEST
+static_assert((sizeof(DISC_UNIQUE_BRANCH_REQUEST)==12), "Invalid size for DISC_UNIQUE_BRANCH_REQUEST struct, is it packed?");
 
 // the special discovery response message
 struct DISC_UNIQUE_BRANCH_RESPONSE
