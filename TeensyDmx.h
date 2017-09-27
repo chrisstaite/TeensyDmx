@@ -48,15 +48,16 @@
 #define READINT(p) ((p[0]<<8) | (p[1]))
 
 enum { DMX_BUFFER_SIZE = 512 };
-enum { RDM_BUFFER_SIZE = (24+231) };  // base packet + param data (no checksum)
+enum { RDM_UID_LENGTH = 6 };
+enum { RDM_MAX_PARAMETER_DATA_LENGTH = 231 };
 
 struct RDMDATA
 {
   byte     StartCode;    // Start Code 0xCC for RDM
-  byte     SubStartCode; // Start Code 0x01 for RDM
+  byte     SubStartCode; // Sub Start Code 0x01 for RDM
   byte     Length;       // packet length
-  byte     DestID[6];
-  byte     SourceID[6];
+  byte     DestID[RDM_UID_LENGTH];
+  byte     SourceID[RDM_UID_LENGTH];
 
   byte     _TransNo;     // transaction number, not checked
   byte     ResponseType;    // ResponseType or PortID
@@ -65,17 +66,30 @@ struct RDMDATA
   byte     CmdClass;     // command class
   uint16_t Parameter;	   // parameter ID
   byte     DataLength;   // parameter data length in bytes
-  byte     Data[231];   // data byte field
+  byte     Data[RDM_MAX_PARAMETER_DATA_LENGTH];   // data byte field
 } __attribute__((__packed__)); // struct RDMDATA
+static_assert((sizeof(RDMDATA)==255), "Invalid size for RDMDATA struct, is it packed?");
+
+enum { RDM_BUFFER_SIZE = sizeof(RDMDATA) };  // base packet + param data (no checksum)
+enum { RDM_PACKET_SIZE_NO_PD = (sizeof(RDMDATA) - RDM_MAX_PARAMETER_DATA_LENGTH) };
+static_assert((RDM_PACKET_SIZE_NO_PD==24), "Invalid size for RDM packet without parameter data");
+
+struct DISC_UNIQUE_BRANCH_REQUEST
+{
+  byte lowerBoundUID[RDM_UID_LENGTH];
+  byte upperBoundUID[RDM_UID_LENGTH];
+} __attribute__((__packed__)); // struct DISC_UNIQUE_BRANCH_REQUEST
+static_assert((sizeof(DISC_UNIQUE_BRANCH_REQUEST)==12), "Invalid size for DISC_UNIQUE_BRANCH_REQUEST struct, is it packed?");
 
 // the special discovery response message
-struct DISCOVERYMSG
+struct DISC_UNIQUE_BRANCH_RESPONSE
 {
   byte headerFE[7];
   byte headerAA;
   byte maskedDevID[12];
   byte checksum[4];
-} __attribute__((__packed__)); // struct DISCOVERYMSG
+} __attribute__((__packed__)); // struct DISC_UNIQUE_BRANCH_RESPONSE
+static_assert((sizeof(DISC_UNIQUE_BRANCH_RESPONSE)==24), "Invalid size for DISC_UNIQUE_BRANCH_RESPONSE struct, is it packed?");
 
 // The buffer for RDM packets being received and sent.
 // this structure is needed to seperate RDM data from DMX data.
@@ -83,8 +97,8 @@ union RDMMSG {
   // the most common RDM packet layout for commands
   struct RDMDATA packet;
 
-  // the layout of the RDM packet when returning a discovery message
-  struct DISCOVERYMSG discovery;
+  // the layout of the RDM packet when sending a DUB response
+  struct DISC_UNIQUE_BRANCH_RESPONSE discovery;
 
   // the byte array used while receiving and sending.
   byte buffer[RDM_BUFFER_SIZE];
@@ -170,20 +184,22 @@ class TeensyDmx
     void nextTx();
 
     // RDM handler functions
-    void rdmUniqueBranch(struct RDMDATA* rdm);
-    uint16_t rdmUnmute(struct RDMDATA* rdm);
-    uint16_t rdmMute(struct RDMDATA* rdm);
-    uint16_t rdmSetIdentify(struct RDMDATA* rdm);
+    void rdmDiscUniqueBranch(struct RDMDATA* rdm);
+    uint16_t rdmDiscUnMute(struct RDMDATA* rdm);
+    uint16_t rdmDiscMute(struct RDMDATA* rdm);
+    uint16_t rdmSetIdentifyDevice(struct RDMDATA* rdm);
     uint16_t rdmSetDeviceLabel(struct RDMDATA* rdm);
-    uint16_t rdmSetStartAddress(struct RDMDATA* rdm);
-    uint16_t rdmGetIdentify(struct RDMDATA* rdm);
+    uint16_t rdmSetDMXStartAddress(struct RDMDATA* rdm);
+    uint16_t rdmGetIdentifyDevice(struct RDMDATA* rdm);
     uint16_t rdmGetDeviceInfo(struct RDMDATA* rdm);
     uint16_t rdmGetManufacturerLabel(struct RDMDATA* rdm);
-    uint16_t rdmGetModelDescription(struct RDMDATA* rdm);
+    uint16_t rdmGetDeviceModelDescription(struct RDMDATA* rdm);
     uint16_t rdmGetDeviceLabel(struct RDMDATA* rdm);
-    uint16_t rdmGetSoftwareVersion(struct RDMDATA* rdm);
-    uint16_t rdmGetStartAddress(struct RDMDATA* rdm);
-    uint16_t rdmGetParameters(struct RDMDATA* rdm);
+    uint16_t rdmGetSoftwareVersionLabel(struct RDMDATA* rdm);
+    uint16_t rdmGetDMXStartAddress(struct RDMDATA* rdm);
+    uint16_t rdmGetSupportedParameters(struct RDMDATA* rdm);
+
+    uint16_t rdmCalculateChecksum(uint8_t* data, uint8_t length);
 
     HardwareSerial& m_uart;
 
@@ -202,6 +218,7 @@ class TeensyDmx
     bool m_identifyMode;
     struct RDMINIT *m_rdm;
     union RDMMSG m_rdmBuffer;
+    uint16_t m_rdmChecksum;
     char m_deviceLabel[32];
 
 #ifndef IRQ_UART0_ERROR
