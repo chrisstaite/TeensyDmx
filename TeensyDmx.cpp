@@ -128,7 +128,7 @@ const volatile uint8_t* TeensyDmx::getBuffer() const
     }
 }
 
-uint8_t TeensyDmx::getChannel(const uint16_t address, const uint8_t value)
+uint8_t TeensyDmx::getChannel(const uint16_t address)
 {
     if (address < DMX_BUFFER_SIZE) {
         return getBuffer()[address];

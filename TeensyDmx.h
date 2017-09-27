@@ -118,9 +118,9 @@ class TeensyDmx
     // Use for receive
     const volatile uint8_t* getBuffer() const;
     // Use for receive with addresses from 0-511
-    uint8_t getChannel(const uint16_t address, const uint8_t value);
+    uint8_t getChannel(const uint16_t address);
     // Use for receive with addresses from 1-512
-    uint8_t getDmxChannel(const uint16_t address, const uint8_t value)
+    uint8_t getDmxChannel(const uint16_t address)
     {
         return getChannel(address - 1, value);
     }
