@@ -136,7 +136,7 @@ class TeensyDmx
     // Use for receive with addresses from 1-512
     uint8_t getDmxChannel(const uint16_t address)
     {
-        return getChannel(address - 1, value);
+        return getChannel(address - 1);
     }
     // Returns true if RDM has changed since this was last called
     bool rdmChanged();
