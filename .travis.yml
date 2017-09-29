@@ -4,18 +4,20 @@ python:
 
 # Default to the fully visualised "sudo" GCE environments, as they are faster for longer running jobs. We don't actually need sudo
 sudo: required
+# Use the latest Travis images since they are more up to date than the stable release.
+group: edge
+
 cache:
   directories:
     - "~/.platformio"
 
 env:
-  - PLATFORMIO_CI_SRC=TeensyDmx.cpp
-  - PLATFORMIO_CI_SRC=TeensyDmx.h
-  - PLATFORMIO_CI_SRC=rdm.h
-  - PLATFORMIO_CI_SRC=examples/TeensyDMXRecv/TeensyDMXRecv.ino
+  - PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+  - PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+  - PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
 install:
   - pip install -U platformio
 
 script:
-  - platformio ci --lib="." --board=Teensy
+  - platformio ci --lib="." --board=teensy31
