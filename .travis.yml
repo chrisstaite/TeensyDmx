@@ -15,7 +15,7 @@ env:
   - PLATFORMIO_CI_SRC=examples/TeensyDMXRecv/TeensyDMXRecv.ino
 
 install:
-  - pip install --user platformio
+  - pip install -U platformio
 
 script:
   - platformio ci --lib="." --board=Teensy
