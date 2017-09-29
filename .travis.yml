@@ -1,0 +1,23 @@
+language: python
+python:
+  - "2.7"
+
+# Short duration job, use the container/without sudo image as it boots faster
+sudo: false
+# Use the latest Travis images since they are more up to date than the stable release.
+group: edge
+
+cache:
+  directories:
+    - "~/.platformio"
+
+env:
+  - PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+  - PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+  - PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+install:
+  - pip install -U platformio
+
+script:
+  - platformio ci --lib="." --board=teensy31

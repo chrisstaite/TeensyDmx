@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/chrisstaite/TeensyDmx.svg?branch=master)](https://travis-ci.org/chrisstaite/TeensyDmx)
+
 TeensyDmx
 =========
 
