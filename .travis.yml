@@ -1,0 +1,21 @@
+language: python
+python:
+  - "2.7"
+
+# Default to the fully visualised "sudo" GCE environments, as they are faster for longer running jobs. We don't actually need sudo
+sudo: required
+cache:
+  directories:
+    - "~/.platformio"
+
+env:
+  - PLATFORMIO_CI_SRC=TeensyDmx.cpp
+  - PLATFORMIO_CI_SRC=TeensyDmx.h
+  - PLATFORMIO_CI_SRC=rdm.h
+  - PLATFORMIO_CI_SRC=examples/TeensyDMXRecv/TeensyDMXRecv.ino
+
+install:
+  - pip install --user platformio
+
+script:
+  - platformio ci --lib="." --board=Teensy
