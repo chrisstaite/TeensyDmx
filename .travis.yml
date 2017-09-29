@@ -2,8 +2,8 @@ language: python
 python:
   - "2.7"
 
-# Default to the fully visualised "sudo" GCE environments, as they are faster for longer running jobs. We don't actually need sudo
-sudo: required
+# Short duration job, use the container/without sudo image as it boots faster
+sudo: false
 # Use the latest Travis images since they are more up to date than the stable release.
 group: edge
 
