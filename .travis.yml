@@ -11,13 +11,31 @@ cache:
   directories:
     - "~/.platformio"
 
-env:
-  - PLATFORMIO_CI_SRC=examples/DimmerWithMaster
-  - PLATFORMIO_CI_SRC=examples/TeensyDMXSend
-  - PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+matrix:
+  fast_finish: true
+  include:
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
 install:
   - pip install -U platformio
 
 script:
-  - platformio ci --lib="." --board=teensy31
+  - platformio ci --lib="." --board=$BOARD
