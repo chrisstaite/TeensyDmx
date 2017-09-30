@@ -11,34 +11,45 @@ cache:
   directories:
     - "~/.platformio"
 
-env:
-  - BOARD=teensy20 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
-  - BOARD=teensy20 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
-  - BOARD=teensy20 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+matrix:
+  fast_finish: true
+  include:
+    - env:
+    - env: BOARD=teensy20 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy20 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy20 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
-  - BOARD=teensy20pp PLATFORMIO_CI_SRC=examples/DimmerWithMaster
-  - BOARD=teensy20pp PLATFORMIO_CI_SRC=examples/TeensyDMXSend
-  - BOARD=teensy20pp PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+    - env: BOARD=teensy20pp PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy20pp PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy20pp PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
-  - BOARD=teensylc PLATFORMIO_CI_SRC=examples/DimmerWithMaster
-  - BOARD=teensylc PLATFORMIO_CI_SRC=examples/TeensyDMXSend
-  - BOARD=teensylc PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
-  - BOARD=teensy30 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
-  - BOARD=teensy30 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
-  - BOARD=teensy30 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
-  - BOARD=teensy31 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
-  - BOARD=teensy31 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
-  - BOARD=teensy31 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
-  - BOARD=teensy35 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
-  - BOARD=teensy35 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
-  - BOARD=teensy35 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
-  - BOARD=teensy36 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
-  - BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
-  - BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+  allow_failures:
+    - env: BOARD=teensy20 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy20 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy20 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+    - env: BOARD=teensy20pp PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy20pp PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy20pp PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
 install:
   - pip install -U platformio
