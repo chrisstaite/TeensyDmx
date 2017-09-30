@@ -14,7 +14,6 @@ cache:
 matrix:
   fast_finish: true
   include:
-    - env:
     - env: BOARD=teensy20 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
     - env: BOARD=teensy20 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
     - env: BOARD=teensy20 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
