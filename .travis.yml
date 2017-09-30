@@ -1,0 +1,41 @@
+language: python
+python:
+  - "2.7"
+
+# Short duration job, use the container/without sudo image as it boots faster
+sudo: false
+# Use the latest Travis images since they are more up to date than the stable release.
+group: edge
+
+cache:
+  directories:
+    - "~/.platformio"
+
+matrix:
+  fast_finish: true
+  include:
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensylc PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy30 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy31 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy35 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/DimmerWithMaster
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
+    - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
+
+install:
+  - pip install -U platformio
+
+script:
+  - platformio ci --lib="." --board=$BOARD
