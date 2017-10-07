@@ -11,6 +11,11 @@ cache:
   directories:
     - "~/.platformio"
 
+env:
+  global:
+   # Warnings are errors
+   - PLATFORMIO_BUILD_FLAGS="-Werror"
+
 matrix:
   fast_finish: true
   include:
