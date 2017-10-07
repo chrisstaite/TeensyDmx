@@ -49,6 +49,7 @@
 
 enum { DMX_BUFFER_SIZE = 512 };
 enum { RDM_UID_LENGTH = 6 };
+enum { RDM_MAX_STRING_LENGTH = 32 };
 enum { RDM_MAX_PARAMETER_DATA_LENGTH = 231 };
 
 struct RDMDATA
@@ -106,10 +107,13 @@ union RDMMSG {
 
 struct RDMINIT
 {
+    const byte *uid;
+    const uint32_t softwareVersionId;
     const char *softwareLabel;
     const char *manufacturerLabel;
     const uint16_t deviceModelId;
     const char  *deviceModel;
+    const uint16_t productCategory;
     uint16_t footprint;
     uint16_t startAddress;
     const uint16_t  additionalCommandsLength;
@@ -120,10 +124,16 @@ class TeensyDmx
 {
   public:
     enum Mode { DMX_OFF, DMX_IN, DMX_OUT };
-    TeensyDmx(HardwareSerial& uart);
-    TeensyDmx(HardwareSerial& uart, uint8_t redePin);
-    TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm);
     TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin);
+    TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm);
+    TeensyDmx(HardwareSerial& uart, uint8_t redePin) :
+        TeensyDmx(uart, nullptr, redePin)
+    {
+    }
+    TeensyDmx(HardwareSerial& uart) :
+        TeensyDmx(uart, nullptr)
+    {
+    }
     void setMode(TeensyDmx::Mode mode);
     void loop();
 
@@ -219,7 +229,10 @@ class TeensyDmx
     struct RDMINIT *m_rdm;
     union RDMMSG m_rdmBuffer;
     uint16_t m_rdmChecksum;
-    char m_deviceLabel[32];
+    char m_deviceLabel[RDM_MAX_STRING_LENGTH];
+    static_assert((sizeof(m_deviceLabel)==32), "Invalid size for m_deviceLabel");
+    // The Device ID for addressing all devices from a manufacturer.
+    byte m_vendorcastUid[RDM_UID_LENGTH];
 
 #ifndef IRQ_UART0_ERROR
     friend void UART0RxStatus(void);
