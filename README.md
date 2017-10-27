@@ -11,5 +11,5 @@ utilised by DmxSimple.
 
 I've done limited testing on the receive and transmit functionality
 with the hardware I have lying around.  DMX transmit, DMX receive
-and RDM responder tested working on Serial1, on Teensy 3.2 on
-Arduino IDE 1.8.2
+and RDM responder tested working on Serial1, on Teensy 3.2 and 3.5
+on Arduino IDE 1.8.2
