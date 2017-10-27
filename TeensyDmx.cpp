@@ -527,14 +527,12 @@ uint16_t TeensyDmx::rdmSetIdentifyDevice(struct RDMDATA* rdm)
 
 uint16_t TeensyDmx::rdmSetDeviceLabel(struct RDMDATA* rdm)
 {
-    if (rdm->DataLength > sizeof(m_deviceLabel)) {
+    if (rdm->DataLength > RDM_MAX_STRING_LENGTH) {
         // Oversized data
         return E120_NR_FORMAT_ERROR;
     } else {
         memcpy(m_deviceLabel, rdm->Data, rdm->DataLength);
-        if (rdm->DataLength < RDM_MAX_STRING_LENGTH) {  // Don't overflow our buffer
-            m_deviceLabel[rdm->DataLength] = '\0';
-        }
+        m_deviceLabel[rdm->DataLength] = '\0';
         rdm->DataLength = 0;
         m_rdmChange = true;
         return NACK_WAS_ACK;

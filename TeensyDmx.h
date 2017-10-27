@@ -153,6 +153,7 @@ class TeensyDmx
     // Returns true if the device should be in identify mode
     bool isIdentify() const;
     // Returns the user-set label of the device
+    // This will always be null terminated, therefore can be up to 33 chars
     const char* getLabel() const;
 
     // Use for transmit with addresses from 0-511
@@ -229,8 +230,9 @@ class TeensyDmx
     struct RDMINIT *m_rdm;
     union RDMMSG m_rdmBuffer;
     uint16_t m_rdmChecksum;
-    char m_deviceLabel[RDM_MAX_STRING_LENGTH];
-    static_assert((sizeof(m_deviceLabel)==32), "Invalid size for m_deviceLabel");
+    // Allow an extra byte for a null if we have a 32 character string
+    char m_deviceLabel[RDM_MAX_STRING_LENGTH + 1];
+    static_assert((sizeof(m_deviceLabel)==33), "Invalid size for m_deviceLabel");
     // The Device ID for addressing all devices from a manufacturer.
     byte m_vendorcastUid[RDM_UID_LENGTH];
 
