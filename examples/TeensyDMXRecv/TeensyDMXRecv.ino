@@ -28,8 +28,6 @@ struct RDMINIT rdmData {
   0   // Definition of additional commands
 };
 
-byte DMXVal[] = {50};
-
 TeensyDmx Dmx(Serial1, &rdmData, DMX_REDE);
 
 void setup() {
