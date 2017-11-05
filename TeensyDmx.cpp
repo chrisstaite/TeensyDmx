@@ -49,12 +49,22 @@ static inline void putUInt16(void* const buffer, const size_t offset, const uint
     reinterpret_cast<byte*>(buffer)[offset + 1] = value & 0xff;
 }
 
+static inline void putUInt16(void* const buffer, const uint16_t value)
+{
+    putUInt16(buffer, 0, value);
+}
+
 static inline void putUInt32(void* const buffer, const size_t offset, const uint32_t value)
 {
     reinterpret_cast<byte*>(buffer)[offset] = (value & 0xff000000) >> 24;
     reinterpret_cast<byte*>(buffer)[offset + 1] = (value & 0x00ff0000) >> 16;
     reinterpret_cast<byte*>(buffer)[offset + 2] = (value & 0x0000ff00) >> 8;
     reinterpret_cast<byte*>(buffer)[offset + 3] = (value & 0x000000ff);
+}
+
+static inline void putUInt32(void* const buffer, const uint16_t value)
+{
+    putUInt32(buffer, 0, value);
 }
 
 TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin) :
@@ -596,16 +606,16 @@ uint16_t TeensyDmx::rdmGetDeviceInfo(struct RDMDATA* rdm)
         devInfo->sensorCount = 0;
         if (m_rdm == nullptr) {
             devInfo->deviceModel = 0;
-            putUInt16(&devInfo->productCategory, 0, E120_PRODUCT_CATEGORY_NOT_DECLARED);
+            putUInt16(&devInfo->productCategory, E120_PRODUCT_CATEGORY_NOT_DECLARED);
             devInfo->softwareVersion = 0;
             devInfo->startAddress = 0;
             devInfo->footprint = 0;
         } else {
-            putUInt16(&devInfo->deviceModel, 0, m_rdm->deviceModelId);
-            putUInt16(&devInfo->productCategory, 0, m_rdm->productCategory);
-            putUInt32(&devInfo->softwareVersion, 0, m_rdm->softwareVersionId);
-            putUInt16(&devInfo->startAddress, 0, m_rdm->startAddress);
-            putUInt16(&devInfo->footprint, 0, m_rdm->footprint);
+            putUInt16(&devInfo->deviceModel, m_rdm->deviceModelId);
+            putUInt16(&devInfo->productCategory, m_rdm->productCategory);
+            putUInt32(&devInfo->softwareVersion, m_rdm->softwareVersionId);
+            putUInt16(&devInfo->startAddress, m_rdm->startAddress);
+            putUInt16(&devInfo->footprint, m_rdm->footprint);
         }
 
         rdm->DataLength = sizeof(DEVICE_INFO_GET_RESPONSE);
@@ -692,9 +702,9 @@ uint16_t TeensyDmx::rdmGetDMXStartAddress(struct RDMDATA* rdm)
        return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
    } else {
        if (m_rdm == nullptr) {
-           putUInt16(rdm->Data, 0, 0);
+           putUInt16(rdm->Data, 0);
        } else {
-           putUInt16(rdm->Data, 0, m_rdm->startAddress);
+           putUInt16(rdm->Data, m_rdm->startAddress);
        }
        rdm->DataLength = sizeof(m_rdm->startAddress);
        return NACK_WAS_ACK;
@@ -855,7 +865,6 @@ void TeensyDmx::processRDM()
 
 void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
 {
-
     struct RDMDATA* rdm = (struct RDMDATA*)(&m_rdmBuffer.packet);
 
     // TIMING: don't send too fast, min: 176 microseconds
@@ -872,7 +881,6 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
         nackReason = E120_NR_HARDWARE_FAULT;
     }
 
-
     // no need to set these data fields:
     // StartCode, SubStartCode
     rdm->MessageCount = 0; // Number of queued messages
@@ -881,9 +889,9 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
     } else {
         rdm->ResponseType = E120_RESPONSE_TYPE_NACK_REASON;
         rdm->DataLength = 2;
-        putUInt16(&rdm->Data, 0, nackReason);
+        putUInt16(&rdm->Data, nackReason);
     }
-    rdm->Length = rdm->DataLength + 24; // total packet length
+    rdm->Length = rdm->DataLength + RDM_PACKET_SIZE_NO_PD; // total packet length
 
     ++(rdm->CmdClass);
     // Parameter
