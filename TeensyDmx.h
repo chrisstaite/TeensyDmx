@@ -69,18 +69,21 @@ struct RDMDATA
   byte     DataLength;   // parameter data length in bytes
   byte     Data[RDM_MAX_PARAMETER_DATA_LENGTH];   // data byte field
 } __attribute__((__packed__)); // struct RDMDATA
-static_assert((sizeof(RDMDATA)==255), "Invalid size for RDMDATA struct, is it packed?");
+static_assert((sizeof(RDMDATA) == 255),
+              "Invalid size for RDMDATA struct, is it packed?");
 
 enum { RDM_BUFFER_SIZE = sizeof(RDMDATA) };  // base packet + param data (no checksum)
 enum { RDM_PACKET_SIZE_NO_PD = (sizeof(RDMDATA) - RDM_MAX_PARAMETER_DATA_LENGTH) };
-static_assert((RDM_PACKET_SIZE_NO_PD==24), "Invalid size for RDM packet without parameter data");
+static_assert((RDM_PACKET_SIZE_NO_PD == 24),
+              "Invalid size for RDM packet without parameter data");
 
 struct DISC_UNIQUE_BRANCH_REQUEST
 {
   byte lowerBoundUID[RDM_UID_LENGTH];
   byte upperBoundUID[RDM_UID_LENGTH];
 } __attribute__((__packed__)); // struct DISC_UNIQUE_BRANCH_REQUEST
-static_assert((sizeof(DISC_UNIQUE_BRANCH_REQUEST)==12), "Invalid size for DISC_UNIQUE_BRANCH_REQUEST struct, is it packed?");
+static_assert((sizeof(DISC_UNIQUE_BRANCH_REQUEST) == 12),
+              "Invalid size for DISC_UNIQUE_BRANCH_REQUEST struct, is it packed?");
 
 // the special discovery response message
 struct DISC_UNIQUE_BRANCH_RESPONSE
@@ -90,19 +93,20 @@ struct DISC_UNIQUE_BRANCH_RESPONSE
   byte maskedDevID[12];
   byte checksum[4];
 } __attribute__((__packed__)); // struct DISC_UNIQUE_BRANCH_RESPONSE
-static_assert((sizeof(DISC_UNIQUE_BRANCH_RESPONSE)==24), "Invalid size for DISC_UNIQUE_BRANCH_RESPONSE struct, is it packed?");
+static_assert((sizeof(DISC_UNIQUE_BRANCH_RESPONSE) == 24),
+              "Invalid size for DISC_UNIQUE_BRANCH_RESPONSE struct, is it packed?");
 
 // The buffer for RDM packets being received and sent.
 // this structure is needed to seperate RDM data from DMX data.
 union RDMMSG {
-  // the most common RDM packet layout for commands
-  struct RDMDATA packet;
+    // the most common RDM packet layout for commands
+    RDMDATA packet;
 
-  // the layout of the RDM packet when sending a DUB response
-  struct DISC_UNIQUE_BRANCH_RESPONSE discovery;
+    // the layout of the RDM packet when sending a DUB response
+    DISC_UNIQUE_BRANCH_RESPONSE discovery;
 
-  // the byte array used while receiving and sending.
-  byte buffer[RDM_BUFFER_SIZE];
+    // the byte array used while receiving and sending.
+    byte buffer[RDM_BUFFER_SIZE];
 } __attribute__((__packed__)); // union RDMMEM
 
 struct RDMINIT
@@ -118,7 +122,7 @@ struct RDMINIT
     uint16_t startAddress;
     const uint16_t  additionalCommandsLength;
     const uint16_t  *additionalCommands;
-}; // struct RDMINIT
+};
 
 class TeensyDmx
 {
@@ -180,7 +184,7 @@ class TeensyDmx
     TeensyDmx(const TeensyDmx&);
     TeensyDmx& operator=(const TeensyDmx&);
 
-    enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV, RDM_RECV_CHECKSUM_HI, RDM_RECV_CHECKSUM_LO, RDM_COMPLETE };
+    enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV, RDM_RECV_CHECKSUM_HI, RDM_RECV_CHECKSUM_LO };
 
     void startTransmit();
     void stopTransmit();
@@ -190,25 +194,25 @@ class TeensyDmx
     void completeFrame();  // Called at error ISR during recv
     void processRDM();
     void respondMessage(unsigned long timingStart, uint16_t nackReason);
-    void readBytes();  // Recv handler
+    void handleByte(uint8_t c);
 
     void nextTx();
 
     // RDM handler functions
-    void rdmDiscUniqueBranch(struct RDMDATA* rdm);
-    uint16_t rdmDiscUnMute(struct RDMDATA* rdm);
-    uint16_t rdmDiscMute(struct RDMDATA* rdm);
-    uint16_t rdmSetIdentifyDevice(struct RDMDATA* rdm);
-    uint16_t rdmSetDeviceLabel(struct RDMDATA* rdm);
-    uint16_t rdmSetDMXStartAddress(struct RDMDATA* rdm);
-    uint16_t rdmGetIdentifyDevice(struct RDMDATA* rdm);
-    uint16_t rdmGetDeviceInfo(struct RDMDATA* rdm);
-    uint16_t rdmGetManufacturerLabel(struct RDMDATA* rdm);
-    uint16_t rdmGetDeviceModelDescription(struct RDMDATA* rdm);
-    uint16_t rdmGetDeviceLabel(struct RDMDATA* rdm);
-    uint16_t rdmGetSoftwareVersionLabel(struct RDMDATA* rdm);
-    uint16_t rdmGetDMXStartAddress(struct RDMDATA* rdm);
-    uint16_t rdmGetSupportedParameters(struct RDMDATA* rdm);
+    void rdmDiscUniqueBranch(RDMDATA& rdm);
+    uint16_t rdmDiscUnMute(RDMDATA& rdm);
+    uint16_t rdmDiscMute(RDMDATA& rdm);
+    uint16_t rdmSetIdentifyDevice(RDMDATA& rdm);
+    uint16_t rdmSetDeviceLabel(RDMDATA& rdm);
+    uint16_t rdmSetDMXStartAddress(RDMDATA& rdm);
+    uint16_t rdmGetIdentifyDevice(RDMDATA& rdm);
+    uint16_t rdmGetDeviceInfo(RDMDATA& rdm);
+    uint16_t rdmGetManufacturerLabel(RDMDATA& rdm);
+    uint16_t rdmGetDeviceModelDescription(RDMDATA& rdm);
+    uint16_t rdmGetDeviceLabel(RDMDATA& rdm);
+    uint16_t rdmGetSoftwareVersionLabel(RDMDATA& rdm);
+    uint16_t rdmGetDMXStartAddress(RDMDATA& rdm);
+    uint16_t rdmGetSupportedParameters(RDMDATA& rdm);
 
     uint16_t rdmCalculateChecksum(uint8_t* data, uint8_t length);
 
@@ -228,34 +232,38 @@ class TeensyDmx
     bool m_rdmMute;
     bool m_identifyMode;
     struct RDMINIT *m_rdm;
+    volatile bool m_rdmNeedsProcessing;
     union RDMMSG m_rdmBuffer;
     uint16_t m_rdmChecksum;
     // Allow an extra byte for a null if we have a 32 character string
     char m_deviceLabel[RDM_MAX_STRING_LENGTH + 1];
-    static_assert((sizeof(m_deviceLabel)==33), "Invalid size for m_deviceLabel");
+    static_assert((sizeof(m_deviceLabel) == 33), "Invalid size for m_deviceLabel");
     // The Device ID for addressing all devices from a manufacturer.
     byte m_vendorcastUid[RDM_UID_LENGTH];
 
-#ifndef IRQ_UART0_ERROR
     friend void UART0RxStatus(void);
-    friend void UART1RxStatus(void);
-    friend void UART2RxStatus(void);
-#endif
     friend void UART0TxStatus(void);
+    friend void UART1RxStatus(void);
     friend void UART1TxStatus(void);
+    friend void UART2RxStatus(void);
     friend void UART2TxStatus(void);
+#ifndef IRQ_UART0_ERROR
     friend void UART0RxError(void);
     friend void UART1RxError(void);
     friend void UART2RxError(void);
+#endif
 #ifdef HAS_KINETISK_UART3
+    friend void UART3RxStatus(void);
     friend void UART3TxStatus(void);
     friend void UART3RxError(void);
 #endif
 #ifdef HAS_KINETISK_UART4
+    friend void UART4RxStatus(void);
     friend void UART4TxStatus(void);
     friend void UART4RxError(void);
 #endif
 #ifdef HAS_KINETISK_UART5
+    friend void UART5RxStatus(void);
     friend void UART5TxStatus(void);
     friend void UART5RxError(void);
 #endif
