@@ -14,7 +14,7 @@
 // The ID below is designated as a prototyping ID.
 byte myUid[] = {0x7f, 0xf0, 0x20, 0x12, 0x00, 0x00};
 
-struct RDMINIT rdmData {
+struct RdmInit rdmData {
   myUid,
   0x00000100,
   "TeensyDMX v0.1",
@@ -30,9 +30,13 @@ struct RDMINIT rdmData {
 
 TeensyDmx Dmx(Serial1, &rdmData, DMX_REDE);
 
+// Teensy 3.x / Teensy LC have the LED on pin 13
+const int ledPin = 13;
+
 void setup() {
   Serial.begin(9600);
   Dmx.setMode(TeensyDmx::DMX_IN);
+  pinMode(ledPin, OUTPUT);
 }
 
 void loop() {
@@ -43,6 +47,9 @@ void loop() {
   if (Dmx.rdmChanged()) {
     if (Dmx.isIdentify()) {
       Serial.println("Identify mode");
+      digitalWrite(ledPin, HIGH);
+    } else {
+      digitalWrite(ledPin, LOW);
     }
     Serial.print("Device label: ");
     Serial.println(Dmx.getLabel());

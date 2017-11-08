@@ -1,19 +1,18 @@
 #include "TeensyDmx.h"
 #include "rdm.h"
 
-static constexpr uint32_t BREAKSPEED = 100000;
-static constexpr uint32_t RDM_BREAKSPEED = 45500;
-static constexpr uint32_t BREAKFORMAT = SERIAL_8E1;
-static constexpr uint32_t DMXSPEED = 250000;
-static constexpr uint32_t DMXFORMAT = SERIAL_8N2;
-static constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
+namespace {
 
-// The Device ID for addressing all devices: 6 times 0xFF.
-static constexpr byte _devIDAll[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+constexpr uint32_t BREAKSPEED = 100000;
+constexpr uint32_t RDM_BREAKSPEED = 45500;
+constexpr uint32_t BREAKFORMAT = SERIAL_8E1;
+constexpr uint32_t DMXSPEED = 250000;
+constexpr uint32_t DMXFORMAT = SERIAL_8N2;
+constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
 
-// The DEVICE_INFO_GET_RESPONSE structure (length = 19) has to be responsed for
-// E120_DEVICE_INFO.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=96
-struct DEVICE_INFO_GET_RESPONSE
+// The DeviceInfoGetResponse structure (length = 19) has to be responsed for
+// E120_DEVICE_INFO.  See http://m_rdmBuffer.openlighting.org/pid/display?manufacturer=0&pid=96
+struct DeviceInfoGetResponse
 {
   byte protocolMajor;
   byte protocolMinor;
@@ -26,49 +25,74 @@ struct DEVICE_INFO_GET_RESPONSE
   uint16_t startAddress;
   uint16_t subDeviceCount;
   byte sensorCount;
-} __attribute__((__packed__));  // struct DEVICE_INFO_GET_RESPONSE
-static_assert((sizeof(DEVICE_INFO_GET_RESPONSE) == 19),
-              "Invalid size for DEVICE_INFO_GET_RESPONSE struct, is it packed?");
+} __attribute__((__packed__));  // struct DeviceInfoGetResponse
+static_assert((sizeof(DeviceInfoGetResponse) == 19),
+              "Invalid size for DeviceInfoGetResponse struct, is it packed?");
+
+struct DiscUniqueBranchRequest
+{
+  byte lowerBoundUID[RDM_UID_LENGTH];
+  byte upperBoundUID[RDM_UID_LENGTH];
+} __attribute__((__packed__)); // struct DiscUniqueBranchRequest
+static_assert((sizeof(DiscUniqueBranchRequest) == 12),
+              "Invalid size for DiscUniqueBranchRequest struct, is it packed?");
+
+// the special discovery response message
+struct DiscUniqueBranchResponse
+{
+  byte headerFE[7];
+  byte headerAA;
+  byte maskedDevID[12];
+  byte checksum[4];
+} __attribute__((__packed__)); // struct DiscUniqueBranchResponse
+static_assert((sizeof(DiscUniqueBranchResponse) == 24),
+              "Invalid size for DiscUniqueBranchResponse struct, is it packed?");
+
+enum { RDM_PACKET_SIZE_NO_PD = (sizeof(RdmData) - RDM_MAX_PARAMETER_DATA_LENGTH) };
+static_assert((RDM_PACKET_SIZE_NO_PD == 24),
+              "Invalid size for RDM packet without parameter data");
 
 #if defined(HAS_KINETISK_UART5)
 // Instance for UART0, UART1, UART2, UART3, UART4, UART5
-static TeensyDmx *uartInstances[6] = {0};
+TeensyDmx *uartInstances[6] = {0};
 #elif defined(HAS_KINETISK_UART4)
 // Instance for UART0, UART1, UART2, UART3, UART4
-static TeensyDmx *uartInstances[5] = {0};
+TeensyDmx *uartInstances[5] = {0};
 #elif defined(HAS_KINETISK_UART3)
 // Instance for UART0, UART1, UART2, UART3
-static TeensyDmx *uartInstances[4] = {0};
+TeensyDmx *uartInstances[4] = {0};
 #else
 // Instance for UART0, UART1, UART2
-static TeensyDmx *uartInstances[3] = {0};
+TeensyDmx *uartInstances[3] = {0};
 #endif
 
-static inline void putUInt16(void* const buffer, const size_t offset, const uint16_t value)
+inline uint16_t getUInt16(const byte* const buffer)
 {
-    reinterpret_cast<byte*>(buffer)[offset] = value >> 8;
-    reinterpret_cast<byte*>(buffer)[offset + 1] = value & 0xff;
+    return (buffer[0] << 8) | buffer[1];
 }
 
-static inline void putUInt16(void* const buffer, const uint16_t value)
+inline uint16_t swapUInt16(uint16_t i)
 {
-    putUInt16(buffer, 0, value);
+    return (i << 8) | (i >> 8);
 }
 
-static inline void putUInt32(void* const buffer, const size_t offset, const uint32_t value)
+inline void putUInt16(void* const buffer, const uint16_t value)
 {
-    reinterpret_cast<byte*>(buffer)[offset] = (value & 0xff000000) >> 24;
-    reinterpret_cast<byte*>(buffer)[offset + 1] = (value & 0x00ff0000) >> 16;
-    reinterpret_cast<byte*>(buffer)[offset + 2] = (value & 0x0000ff00) >> 8;
-    reinterpret_cast<byte*>(buffer)[offset + 3] = (value & 0x000000ff);
+    reinterpret_cast<byte*>(buffer)[0] = value >> 8;
+    reinterpret_cast<byte*>(buffer)[1] = value & 0xff;
 }
 
-static inline void putUInt32(void* const buffer, const uint16_t value)
+inline void putUInt32(void* const buffer, const uint32_t value)
 {
-    putUInt32(buffer, 0, value);
+    reinterpret_cast<byte*>(buffer)[0] = (value & 0xff000000) >> 24;
+    reinterpret_cast<byte*>(buffer)[1] = (value & 0x00ff0000) >> 16;
+    reinterpret_cast<byte*>(buffer)[2] = (value & 0x0000ff00) >> 8;
+    reinterpret_cast<byte*>(buffer)[3] = (value & 0x000000ff);
 }
 
-TeensyDmx::TeensyDmx(HardwareSerial& uart, RDMINIT* rdm, uint8_t redePin) :
+}  // anon namespace
+
+TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm, uint8_t redePin) :
     TeensyDmx(uart, rdm)
 {
     pinMode(redePin, OUTPUT);
@@ -76,7 +100,7 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RDMINIT* rdm, uint8_t redePin) :
     *m_redePin = 0;
 }
 
-TeensyDmx::TeensyDmx(HardwareSerial& uart, RDMINIT* rdm) :
+TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
     m_uart(uart),
     m_dmxBuffer1{0},
     m_dmxBuffer2{0},
@@ -95,8 +119,7 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RDMINIT* rdm) :
     m_rdmNeedsProcessing(false),
     m_rdmBuffer(),
     m_rdmChecksum(0),
-    m_deviceLabel{0},
-    m_vendorcastUid{0x00, 0x00, 0xff, 0xff, 0xff, 0xff}
+    m_deviceLabel{0}
 {
     if (&m_uart == &Serial1) {
         uartInstances[0] = this;
@@ -120,11 +143,6 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RDMINIT* rdm) :
         uartInstances[5] = this;
     }
 #endif
-
-    if (m_rdm != nullptr) {
-        m_vendorcastUid[0] = m_rdm->uid[0];
-        m_vendorcastUid[1] = m_rdm->uid[1];
-    }
 }
 
 const volatile uint8_t* TeensyDmx::getBuffer() const
@@ -386,20 +404,16 @@ void TeensyDmx::stopTransmit()
 
 bool TeensyDmx::newFrame(void)
 {
-    if (m_newFrame) {
-        m_newFrame = false;
-        return true;
-    }
-    return false;
+    bool newFrame = m_newFrame;
+    m_newFrame = false;
+    return newFrame;
 }
 
 bool TeensyDmx::rdmChanged(void)
 {
-    if (m_rdmChange) {
-        m_rdmChange = false;
-        return true;
-    }
-    return false;
+    bool rdmChange = m_rdmChange;
+    m_rdmChange = false;
+    return rdmChange;
 }
 
 void TeensyDmx::completeFrame()
@@ -427,30 +441,30 @@ void TeensyDmx::completeFrame()
     m_state = State::BREAK;
 }
 
-void TeensyDmx::rdmDiscUniqueBranch(RDMDATA& rdm)
+void TeensyDmx::rdmDiscUniqueBranch()
 {
     if (m_rdm == nullptr || m_rdmMute) {
         return;
     }
 
-    if (rdm.Length != (RDM_PACKET_SIZE_NO_PD + sizeof(DISC_UNIQUE_BRANCH_REQUEST))) {
+    if (m_rdmBuffer.length != (RDM_PACKET_SIZE_NO_PD + sizeof(DiscUniqueBranchRequest))) {
         return;
     }
 
-    if (rdm.DataLength != sizeof(DISC_UNIQUE_BRANCH_REQUEST)) {
+    if (m_rdmBuffer.dataLength != sizeof(DiscUniqueBranchRequest)) {
         return;
     }
 
-    DISC_UNIQUE_BRANCH_REQUEST *dub_request =
-        reinterpret_cast<DISC_UNIQUE_BRANCH_REQUEST*>(rdm.Data);
+    DiscUniqueBranchRequest *dub_request =
+        reinterpret_cast<DiscUniqueBranchRequest*>(m_rdmBuffer.data);
 
     if (memcmp(dub_request->lowerBoundUID, m_rdm->uid, RDM_UID_LENGTH) <= 0 &&
             memcmp(m_rdm->uid, dub_request->upperBoundUID, RDM_UID_LENGTH) <= 0) {
         // I'm in range - say hello to the lovely controller
 
         // respond with the special discovery message !
-        DISC_UNIQUE_BRANCH_RESPONSE *dub_response =
-            reinterpret_cast<DISC_UNIQUE_BRANCH_RESPONSE*>(&m_rdmBuffer.discovery);
+        DiscUniqueBranchResponse *dub_response =
+            reinterpret_cast<DiscUniqueBranchResponse*>(&m_rdmBuffer);
 
         // fill in the discovery response structure
         for (byte i = 0; i < 7; ++i) {
@@ -479,76 +493,77 @@ void TeensyDmx::rdmDiscUniqueBranch(RDMDATA& rdm)
         m_dmxBufferIndex = 0;
         // No break for DUB
         m_uart.begin(DMXSPEED, DMXFORMAT);
-        for (uint16_t i = 0; i < sizeof(DISC_UNIQUE_BRANCH_RESPONSE); ++i) {
-            m_uart.write(m_rdmBuffer.buffer[i]);
+        char* ptr = reinterpret_cast<char*>(&m_rdmBuffer);
+        for (uint16_t i = 0; i < sizeof(DiscUniqueBranchResponse); ++i) {
+            m_uart.write(ptr[i]);
             m_uart.flush();
         }
         startReceive();
     }
 }
 
-uint16_t TeensyDmx::rdmDiscUnMute(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmDiscUnMute()
 {
-    if (rdm.DataLength != 0) {
+    if (m_rdmBuffer.dataLength != 0) {
         return E120_NR_FORMAT_ERROR;
     }
     m_rdmMute = false;
     // Control field
-    rdm.Data[0] = 0;
-    rdm.Data[1] = 0;
-    rdm.DataLength = 2;
+    m_rdmBuffer.data[0] = 0;
+    m_rdmBuffer.data[1] = 0;
+    m_rdmBuffer.dataLength = 2;
     return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmDiscMute(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmDiscMute()
 {
-    if (rdm.DataLength != 0) {
+    if (m_rdmBuffer.dataLength != 0) {
         return E120_NR_FORMAT_ERROR;
     }
     m_rdmMute = true;
     // Control field
-    rdm.Data[0] = 0;
-    rdm.Data[1] = 0;
-    rdm.DataLength = 2;
+    m_rdmBuffer.data[0] = 0;
+    m_rdmBuffer.data[1] = 0;
+    m_rdmBuffer.dataLength = 2;
     return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmSetIdentifyDevice(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmSetIdentifyDevice()
 {
-    if (rdm.DataLength != 1) {
+    if (m_rdmBuffer.dataLength != 1) {
         // Oversized data
         return E120_NR_FORMAT_ERROR;
     }
-    if ((rdm.Data[0] != 0) && (rdm.Data[0] != 1)) {
+    if ((m_rdmBuffer.data[0] != 0) && (m_rdmBuffer.data[0] != 1)) {
         // Out of range data
         return E120_NR_DATA_OUT_OF_RANGE;
     }
-    m_identifyMode = rdm.Data[0] != 0;
+    m_identifyMode = m_rdmBuffer.data[0] != 0;
     m_rdmChange = true;
-    rdm.DataLength = 0;
+    m_rdmBuffer.dataLength = 0;
     return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmSetDeviceLabel(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmSetDeviceLabel()
 {
-    if (rdm.DataLength > RDM_MAX_STRING_LENGTH) {
+    if (m_rdmBuffer.dataLength > RDM_MAX_STRING_LENGTH) {
         // Oversized data
         return E120_NR_FORMAT_ERROR;
     }
-    memcpy(m_deviceLabel, rdm.Data, rdm.DataLength);
-    m_deviceLabel[rdm.DataLength] = '\0';
-    rdm.DataLength = 0;
+    memcpy(m_deviceLabel, m_rdmBuffer.data, m_rdmBuffer.dataLength);
+    m_deviceLabel[m_rdmBuffer.dataLength] = '\0';
+    m_rdmBuffer.dataLength = 0;
     m_rdmChange = true;
     return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmSetDMXStartAddress(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmSetDMXStartAddress()
 {
-    if (rdm.DataLength != 2) {
+    if (m_rdmBuffer.dataLength != 2) {
         // Oversized data
         return E120_NR_FORMAT_ERROR;
     }
-    uint16_t newStartAddress = READINT(rdm.Data);
+    uint16_t newStartAddress = getUInt16(m_rdmBuffer.data);
     if ((newStartAddress <= 0) || (newStartAddress > DMX_BUFFER_SIZE)) {
         // Out of range start address
         return E120_NR_DATA_OUT_OF_RANGE;
@@ -557,39 +572,39 @@ uint16_t TeensyDmx::rdmSetDMXStartAddress(RDMDATA& rdm)
         return E120_NR_HARDWARE_FAULT;
     }
     m_rdm->startAddress = newStartAddress;
-    rdm.DataLength = 0;
+    m_rdmBuffer.dataLength = 0;
     m_rdmChange = true;
     return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmGetIdentifyDevice(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmGetIdentifyDevice()
 {
-    if (rdm.DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
     }
-    if (rdm.SubDev != 0) {
+    if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     }
-    rdm.Data[0] = m_identifyMode;
-    rdm.DataLength = 1;
+    m_rdmBuffer.data[0] = m_identifyMode;
+    m_rdmBuffer.dataLength = 1;
     return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmGetDeviceInfo(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmGetDeviceInfo()
 {
-    if (rdm.DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm.SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
         // return all device info data
         // The data has to be responsed in the Data buffer.
-        DEVICE_INFO_GET_RESPONSE *devInfo =
-            reinterpret_cast<DEVICE_INFO_GET_RESPONSE*>(rdm.Data);
+        DeviceInfoGetResponse *devInfo =
+            reinterpret_cast<DeviceInfoGetResponse*>(m_rdmBuffer.data);
 
         devInfo->protocolMajor = 1;
         devInfo->protocolMinor = 0;
@@ -611,119 +626,119 @@ uint16_t TeensyDmx::rdmGetDeviceInfo(RDMDATA& rdm)
             putUInt16(&devInfo->footprint, m_rdm->footprint);
         }
 
-        rdm.DataLength = sizeof(DEVICE_INFO_GET_RESPONSE);
+        m_rdmBuffer.dataLength = sizeof(DeviceInfoGetResponse);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetManufacturerLabel(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmGetManufacturerLabel()
 {
-    if (rdm.DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm.SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else if (m_rdm == nullptr) {
         return E120_NR_HARDWARE_FAULT;
     } else {
         // return the manufacturer label
-        rdm.DataLength = strnlen(m_rdm->manufacturerLabel, RDM_MAX_STRING_LENGTH);
-        memcpy(rdm.Data, m_rdm->manufacturerLabel, rdm.DataLength);
+        m_rdmBuffer.dataLength = strnlen(m_rdm->manufacturerLabel, RDM_MAX_STRING_LENGTH);
+        memcpy(m_rdmBuffer.data, m_rdm->manufacturerLabel, m_rdmBuffer.dataLength);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetDeviceModelDescription(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmGetDeviceModelDescription()
 {
-    if (rdm.DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm.SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else if (m_rdm == nullptr) {
         return E120_NR_HARDWARE_FAULT;
     } else {
         // return the DEVICE MODEL DESCRIPTION
-        rdm.DataLength = strnlen(m_rdm->deviceModel, RDM_MAX_STRING_LENGTH);
-        memcpy(rdm.Data, m_rdm->deviceModel, rdm.DataLength);
+        m_rdmBuffer.dataLength = strnlen(m_rdm->deviceModel, RDM_MAX_STRING_LENGTH);
+        memcpy(m_rdmBuffer.data, m_rdm->deviceModel, m_rdmBuffer.dataLength);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetDeviceLabel(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmGetDeviceLabel()
 {
-    if (rdm.DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm.SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
-        rdm.DataLength = strnlen(m_deviceLabel, RDM_MAX_STRING_LENGTH);
-        memcpy(rdm.Data, m_deviceLabel, rdm.DataLength);
+        m_rdmBuffer.dataLength = strnlen(m_deviceLabel, RDM_MAX_STRING_LENGTH);
+        memcpy(m_rdmBuffer.data, m_deviceLabel, m_rdmBuffer.dataLength);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetSoftwareVersionLabel(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmGetSoftwareVersionLabel()
 {
-    if (rdm.DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm.SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else if (m_rdm == nullptr) {
         return E120_NR_HARDWARE_FAULT;
     } else {
         // return the SOFTWARE_VERSION_LABEL
-        rdm.DataLength = strnlen(m_rdm->softwareLabel, RDM_MAX_STRING_LENGTH);
-        memcpy(rdm.Data, m_rdm->softwareLabel, rdm.DataLength);
+        m_rdmBuffer.dataLength = strnlen(m_rdm->softwareLabel, RDM_MAX_STRING_LENGTH);
+        memcpy(m_rdmBuffer.data, m_rdm->softwareLabel, m_rdmBuffer.dataLength);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetDMXStartAddress(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmGetDMXStartAddress()
 {
-   if (rdm.DataLength > 0) {
+   if (m_rdmBuffer.dataLength > 0) {
        // Unexpected data
        return E120_NR_FORMAT_ERROR;
-   } else if (rdm.SubDev != 0) {
+   } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
        // No sub-devices supported
        return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
    } else {
        if (m_rdm == nullptr) {
-           putUInt16(rdm.Data, 0);
+           putUInt16(m_rdmBuffer.data, 0);
        } else {
-           putUInt16(rdm.Data, m_rdm->startAddress);
+           putUInt16(m_rdmBuffer.data, m_rdm->startAddress);
        }
-       rdm.DataLength = sizeof(m_rdm->startAddress);
+       m_rdmBuffer.dataLength = sizeof(m_rdm->startAddress);
        return NACK_WAS_ACK;
    }
 }
 
-uint16_t TeensyDmx::rdmGetSupportedParameters(RDMDATA& rdm)
+uint16_t TeensyDmx::rdmGetSupportedParameters()
 {
-    if (rdm.DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm.SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
         if (m_rdm == nullptr) {
-            rdm.DataLength = 6;
+            m_rdmBuffer.dataLength = 6;
         } else {
-            rdm.DataLength = 2 * (3 + m_rdm->additionalCommandsLength);
+            m_rdmBuffer.dataLength = 2 * (3 + m_rdm->additionalCommandsLength);
             for (int n = 0; n < m_rdm->additionalCommandsLength; ++n) {
-                putUInt16(rdm.Data, 6+n+n, m_rdm->additionalCommands[n]);
+                putUInt16(&m_rdmBuffer.data[6+n+n], m_rdm->additionalCommands[n]);
             }
         }
-        putUInt16(rdm.Data, 0, E120_MANUFACTURER_LABEL);
-        putUInt16(rdm.Data, 2, E120_DEVICE_MODEL_DESCRIPTION);
-        putUInt16(rdm.Data, 4, E120_DEVICE_LABEL);
+        putUInt16(&m_rdmBuffer.data[0], E120_MANUFACTURER_LABEL);
+        putUInt16(&m_rdmBuffer.data[2], E120_DEVICE_MODEL_DESCRIPTION);
+        putUInt16(&m_rdmBuffer.data[4], E120_DEVICE_LABEL);
         return NACK_WAS_ACK;
     }
 }
@@ -741,156 +756,162 @@ uint16_t TeensyDmx::rdmCalculateChecksum(uint8_t* data, uint8_t length)
     return checksum;
 }
 
+bool TeensyDmx::isForAll(const byte* id)
+{
+    for (int i = 0; i < RDM_UID_LENGTH; ++i) {
+        if (*id != 0xff) {
+            return false;
+        }
+        ++id;
+    }
+    return true;
+}
+
+bool TeensyDmx::isForVendor(const byte* id)
+{
+    if (id[0] != m_rdm->uid[0] || id[1] != m_rdm->uid[1])
+    {
+        return false;
+    }
+    for (int i = 2; i < RDM_UID_LENGTH; ++i)
+    {
+        if (id[i] != 0xff) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void TeensyDmx::processRDM()
 {
+    if (m_rdm == nullptr) {
+        return;
+    }
+
     uint16_t nackReason = E120_NR_UNKNOWN_PID;
 
     m_state = IDLE;
     unsigned long timingStart = micros();
-    RDMDATA& rdm = m_rdmBuffer.packet;
 
-    if (m_rdm != nullptr) {
-        bool isForMe = (memcmp(rdm.DestID, m_rdm->uid, RDM_UID_LENGTH) == 0);
-        if (isForMe ||
-                memcmp(rdm.DestID, _devIDAll, RDM_UID_LENGTH) == 0 ||
-                memcmp(rdm.DestID, m_vendorcastUid, RDM_UID_LENGTH) == 0) {
-
-            bool sendResponse = true;
-
-            uint16_t parameter = SWAPINT(rdm.Parameter);
-            if (rdm.CmdClass == E120_DISCOVERY_COMMAND) {
-                switch (parameter) {
-                    case E120_DISC_UNIQUE_BRANCH:
-                        rdmDiscUniqueBranch(rdm);
-                        sendResponse = false;  // DUB is special
-                        break;
-                    case E120_DISC_UN_MUTE:
-                        nackReason = rdmDiscUnMute(rdm);
-                        break;
-                    case E120_DISC_MUTE:
-                        nackReason = rdmDiscMute(rdm);
-                        break;
-                    default:
-                        // Don't respond, unknown DISCOVERY PID
-                        sendResponse = false;
-                        break;
-                }
-                if (nackReason != NACK_WAS_ACK) {
-                        // Only send ACKs for DISCOVERY, don't NACK
-                        sendResponse = false;
-                }
-            } else {
-                if ((rdm.CmdClass == E120_GET_COMMAND) ||
-                        (rdm.CmdClass == E120_SET_COMMAND)) {
-                    switch (parameter) {
-                        case E120_IDENTIFY_DEVICE:
-                            if (rdm.CmdClass == E120_SET_COMMAND) {
-                                nackReason = rdmSetIdentifyDevice(rdm);
-                            } else {
-                                nackReason = rdmGetIdentifyDevice(rdm);
-                            }
-                            break;
-                        case E120_DEVICE_LABEL:
-                            if (rdm.CmdClass == E120_SET_COMMAND) {
-                                nackReason = rdmSetDeviceLabel(rdm);
-                            } else {
-                                nackReason = rdmGetDeviceLabel(rdm);
-                            }
-                            break;
-                        case E120_DMX_START_ADDRESS:
-                            if (rdm.CmdClass == E120_SET_COMMAND) {
-                                nackReason = rdmSetDMXStartAddress(rdm);
-                            } else {
-                                nackReason = rdmGetDMXStartAddress(rdm);
-                            }
-                            break;
-                        case E120_SUPPORTED_PARAMETERS:
-                            if (rdm.CmdClass == E120_SET_COMMAND) {
-                                nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                            } else {
-                                nackReason = rdmGetSupportedParameters(rdm);
-                            }
-                            break;
-                        case E120_DEVICE_INFO:
-                            if (rdm.CmdClass == E120_SET_COMMAND) {
-                                nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                            } else {
-                                nackReason = rdmGetDeviceInfo(rdm);
-                            }
-                            break;
-                        case E120_MANUFACTURER_LABEL:
-                            if (rdm.CmdClass == E120_SET_COMMAND) {
-                                nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                            } else {
-                                nackReason = rdmGetManufacturerLabel(rdm);
-                            }
-                            break;
-                        case E120_DEVICE_MODEL_DESCRIPTION:
-                            if (rdm.CmdClass == E120_SET_COMMAND) {
-                                nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                            } else {
-                                nackReason = rdmGetDeviceModelDescription(rdm);
-                            }
-                            break;
-                        case E120_SOFTWARE_VERSION_LABEL:
-                            if (rdm.CmdClass == E120_SET_COMMAND) {
-                                nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                            } else {
-                                nackReason = rdmGetSoftwareVersionLabel(rdm);
-                            }
-                            break;
-                        default:
-                            nackReason = E120_NR_UNKNOWN_PID;
-                            break;
-                    }
-                } else {
-                    // Unknown command class
-                    nackReason = E120_NR_FORMAT_ERROR;
-                }
+    bool isForMe = (memcmp(m_rdmBuffer.destId, m_rdm->uid, RDM_UID_LENGTH) == 0);
+    if (isForMe || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
+        bool sendResponse = true;
+        uint16_t parameter = swapUInt16(m_rdmBuffer.parameter);
+        if (m_rdmBuffer.cmdClass == E120_DISCOVERY_COMMAND) {
+            switch (parameter) {
+                case E120_DISC_UNIQUE_BRANCH:
+                    rdmDiscUniqueBranch();
+                    sendResponse = false;  // DUB is special
+                    break;
+                case E120_DISC_UN_MUTE:
+                    nackReason = rdmDiscUnMute();
+                    break;
+                case E120_DISC_MUTE:
+                    nackReason = rdmDiscMute();
+                    break;
+                default:
+                    // Don't respond, unknown DISCOVERY PID
+                    sendResponse = false;
+                    break;
             }
-            if (isForMe && sendResponse) {
-                respondMessage(timingStart, nackReason);
+            if (nackReason != NACK_WAS_ACK) {
+                // Only send ACKs for DISCOVERY, don't NACK
+                sendResponse = false;
+            }
+        } else if (m_rdmBuffer.cmdClass == E120_GET_COMMAND) {
+            switch (parameter) {
+                case E120_IDENTIFY_DEVICE:
+                    nackReason = rdmGetIdentifyDevice();
+                    break;
+                case E120_DEVICE_LABEL:
+                    nackReason = rdmGetDeviceLabel();
+                    break;
+                case E120_DMX_START_ADDRESS:
+                    nackReason = rdmGetDMXStartAddress();
+                    break;
+                case E120_SUPPORTED_PARAMETERS:
+                    nackReason = rdmGetSupportedParameters();
+                    break;
+                case E120_DEVICE_INFO:
+                    nackReason = rdmGetDeviceInfo();
+                    break;
+                case E120_MANUFACTURER_LABEL:
+                    nackReason = rdmGetManufacturerLabel();
+                    break;
+                case E120_DEVICE_MODEL_DESCRIPTION:
+                    nackReason = rdmGetDeviceModelDescription();
+                    break;
+                case E120_SOFTWARE_VERSION_LABEL:
+                    nackReason = rdmGetSoftwareVersionLabel();
+                    break;
+                default:
+                    nackReason = E120_NR_UNKNOWN_PID;
+                    break;
+            }
+        } else if (m_rdmBuffer.cmdClass == E120_SET_COMMAND) {
+            switch (parameter) {
+                case E120_IDENTIFY_DEVICE:
+                    nackReason = rdmSetIdentifyDevice();
+                    break;
+                case E120_DEVICE_LABEL:
+                    nackReason = rdmSetDeviceLabel();
+                    break;
+                case E120_DMX_START_ADDRESS:
+                    nackReason = rdmSetDMXStartAddress();
+                    break;
+                case E120_SUPPORTED_PARAMETERS:
+                case E120_DEVICE_INFO:
+                case E120_MANUFACTURER_LABEL:
+                case E120_DEVICE_MODEL_DESCRIPTION:
+                case E120_SOFTWARE_VERSION_LABEL:
+                    nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
+                    break;
+                default:
+                    nackReason = E120_NR_UNKNOWN_PID;
+                    break;
             }
         } else {
-            // Not for me
+            // Unknown command class
+            nackReason = E120_NR_FORMAT_ERROR;
+        }
+        if (isForMe && sendResponse) {
+            // TIMING: don't send too fast, min: 176 microseconds
+            timingStart = micros() - timingStart;
+            if (timingStart < 176) {
+                delayMicroseconds(176 - timingStart);
+            }
+            respondMessage(nackReason);
         }
     }
 }
 
-void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
+void TeensyDmx::respondMessage(uint16_t nackReason)
 {
-    RDMDATA& rdm = m_rdmBuffer.packet;
-
-    // TIMING: don't send too fast, min: 176 microseconds
-    timingStart = micros() - timingStart;
-    if (timingStart < 176) {
-        delayMicroseconds(176 - timingStart);
-    }
-
     // swap SrcID into DestID for sending back.
-    memcpy(rdm.DestID, rdm.SourceID, RDM_UID_LENGTH);
+    memcpy(m_rdmBuffer.destId, m_rdmBuffer.sourceId, RDM_UID_LENGTH);
     if (m_rdm != nullptr) {
-        memcpy(rdm.SourceID, m_rdm->uid, RDM_UID_LENGTH);
+        memcpy(m_rdmBuffer.sourceId, m_rdm->uid, RDM_UID_LENGTH);
     } else {
         nackReason = E120_NR_HARDWARE_FAULT;
     }
 
     // no need to set these data fields:
     // StartCode, SubStartCode
-    rdm.MessageCount = 0;  // Number of queued messages
+    m_rdmBuffer.messageCount = 0;  // Number of queued messages
     if (nackReason == NACK_WAS_ACK) {
-        rdm.ResponseType = E120_RESPONSE_TYPE_ACK;
+        m_rdmBuffer.responseType = E120_RESPONSE_TYPE_ACK;
     } else {
-        rdm.ResponseType = E120_RESPONSE_TYPE_NACK_REASON;
-        rdm.DataLength = 2;
-        putUInt16(&rdm.Data, nackReason);
+        m_rdmBuffer.responseType = E120_RESPONSE_TYPE_NACK_REASON;
+        m_rdmBuffer.dataLength = 2;
+        putUInt16(&m_rdmBuffer.data, nackReason);
     }
-    rdm.Length = rdm.DataLength + RDM_PACKET_SIZE_NO_PD;  // total packet length
+    m_rdmBuffer.length = m_rdmBuffer.dataLength + RDM_PACKET_SIZE_NO_PD;  // total packet length
 
-    ++rdm.CmdClass;
+    ++m_rdmBuffer.cmdClass;
     // Parameter
 
-    uint16_t checkSum = rdmCalculateChecksum(m_rdmBuffer.buffer, rdm.Length);
+    uint16_t checkSum = rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
+                                             m_rdmBuffer.length);
 
     // Send reply
     stopReceive();
@@ -903,8 +924,8 @@ void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
     m_uart.write(0);
     m_uart.flush();
     m_uart.begin(DMXSPEED, DMXFORMAT);
-    for (uint16_t i = 0; i < rdm.Length; ++i) {
-        m_uart.write(m_rdmBuffer.buffer[i]);
+    for (uint16_t i = 0; i < m_rdmBuffer.length; ++i) {
+        m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer)[i]);
         m_uart.flush();
     }
     m_uart.write(checkSum >> 8);
@@ -1532,7 +1553,7 @@ void TeensyDmx::handleByte(uint8_t c)
                     break;
                 case E120_SC_RDM:
                     m_rdmNeedsProcessing = false;
-                    m_rdmBuffer.buffer[0] = c;
+                    reinterpret_cast<uint8_t*>(&m_rdmBuffer)[0] = c;
                     m_dmxBufferIndex = 1;
                     m_state = State::RDM_RECV;
                     break;
@@ -1543,15 +1564,15 @@ void TeensyDmx::handleByte(uint8_t c)
             }
             break;
         case State::RDM_RECV:
-            m_rdmBuffer.buffer[m_dmxBufferIndex] = c;
+            reinterpret_cast<uint8_t*>(&m_rdmBuffer)[m_dmxBufferIndex] = c;
             ++m_dmxBufferIndex;
-            if (m_dmxBufferIndex >= RDM_BUFFER_SIZE) {
+            if (m_dmxBufferIndex >= sizeof(RdmData)) {
                 m_state = State::RDM_RECV_CHECKSUM_HI;
             } else if (m_dmxBufferIndex >= 3) {
                 // Got enough data to have packet length
-                if (m_rdmBuffer.packet.SubStartCode != E120_SC_SUB_MESSAGE) {
+                if (m_rdmBuffer.subStartCode != E120_SC_SUB_MESSAGE) {
                     m_state = State::IDLE;  // Invalid RDM packet
-                } else if (m_dmxBufferIndex >= m_rdmBuffer.packet.Length) {
+                } else if (m_dmxBufferIndex >= m_rdmBuffer.length) {
                     // Got expected packet length, need checksum
                     m_state = State::RDM_RECV_CHECKSUM_HI;
                 }
@@ -1563,8 +1584,9 @@ void TeensyDmx::handleByte(uint8_t c)
             break;
         case State::RDM_RECV_CHECKSUM_LO:
             m_rdmChecksum = (m_rdmChecksum | c);
-            if (m_rdmChecksum == rdmCalculateChecksum(m_rdmBuffer.buffer,
-                                                      m_rdmBuffer.packet.Length)) {
+            if (m_rdmChecksum ==
+                    rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
+                                         m_rdmBuffer.length)) {
                 m_rdmNeedsProcessing = true;
             }
             m_state = State::IDLE;
