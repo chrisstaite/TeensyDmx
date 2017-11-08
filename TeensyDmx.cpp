@@ -71,7 +71,7 @@ inline uint16_t getUInt16(const byte* const buffer)
     return (buffer[0] << 8) | buffer[1];
 }
 
-inline uint16_t swapInt(uint16_t i)
+inline uint16_t swapUInt16(uint16_t i)
 {
     return (i << 8) | (i >> 8);
 }
@@ -583,7 +583,7 @@ uint16_t TeensyDmx::rdmGetIdentifyDevice()
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
     }
-    if (m_rdmBuffer.subDev != 0) {
+    if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     }
@@ -597,7 +597,7 @@ uint16_t TeensyDmx::rdmGetDeviceInfo()
     if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (m_rdmBuffer.subDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
@@ -636,7 +636,7 @@ uint16_t TeensyDmx::rdmGetManufacturerLabel()
     if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (m_rdmBuffer.subDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else if (m_rdm == nullptr) {
@@ -654,7 +654,7 @@ uint16_t TeensyDmx::rdmGetDeviceModelDescription()
     if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (m_rdmBuffer.subDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else if (m_rdm == nullptr) {
@@ -672,7 +672,7 @@ uint16_t TeensyDmx::rdmGetDeviceLabel()
     if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (m_rdmBuffer.subDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
@@ -687,7 +687,7 @@ uint16_t TeensyDmx::rdmGetSoftwareVersionLabel()
     if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (m_rdmBuffer.subDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else if (m_rdm == nullptr) {
@@ -705,7 +705,7 @@ uint16_t TeensyDmx::rdmGetDMXStartAddress()
    if (m_rdmBuffer.dataLength > 0) {
        // Unexpected data
        return E120_NR_FORMAT_ERROR;
-   } else if (m_rdmBuffer.subDev != 0) {
+   } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
        // No sub-devices supported
        return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
    } else {
@@ -724,7 +724,7 @@ uint16_t TeensyDmx::rdmGetSupportedParameters()
     if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (m_rdmBuffer.subDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
@@ -796,7 +796,7 @@ void TeensyDmx::processRDM()
     bool isForMe = (memcmp(m_rdmBuffer.destId, m_rdm->uid, RDM_UID_LENGTH) == 0);
     if (isForMe || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
         bool sendResponse = true;
-        uint16_t parameter = swapInt(m_rdmBuffer.parameter);
+        uint16_t parameter = swapUInt16(m_rdmBuffer.parameter);
         if (m_rdmBuffer.cmdClass == E120_DISCOVERY_COMMAND) {
             switch (parameter) {
                 case E120_DISC_UNIQUE_BRANCH:

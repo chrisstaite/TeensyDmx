@@ -3,8 +3,8 @@
 TeensyDmx
 =========
 
-DMX Transmit and Receive for Teensy 3.x and Teensy-LC with RDM client
-support.  It should support all of the serial interfaces on the
+DMX Transmit and Receive for Teensy 3.x and Teensy-LC with RDM responder
+(client) support.  It should support all of the serial interfaces on the
 devices.
 
 This is the combination of DMXSerial2, DmxReceive and DmxSimple but
