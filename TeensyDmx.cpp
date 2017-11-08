@@ -71,7 +71,7 @@ inline uint16_t getUInt16(const byte* const buffer)
     return (buffer[0] << 8) | buffer[1];
 }
 
-inline uint16_t swapInt(uint16_t i)
+inline uint16_t swapUInt16(uint16_t i)
 {
     return (i << 8) | (i >> 8);
 }
@@ -796,7 +796,7 @@ void TeensyDmx::processRDM()
     bool isForMe = (memcmp(m_rdmBuffer.destId, m_rdm->uid, RDM_UID_LENGTH) == 0);
     if (isForMe || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
         bool sendResponse = true;
-        uint16_t parameter = swapInt(m_rdmBuffer.parameter);
+        uint16_t parameter = swapUInt16(m_rdmBuffer.parameter);
         if (m_rdmBuffer.cmdClass == E120_DISCOVERY_COMMAND) {
             switch (parameter) {
                 case E120_DISC_UNIQUE_BRANCH:
