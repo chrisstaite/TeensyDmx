@@ -34,6 +34,7 @@ enum { DMX_BUFFER_SIZE = 512 };
 enum { RDM_UID_LENGTH = 6 };
 enum { RDM_MAX_STRING_LENGTH = 32 };
 enum { RDM_MAX_PARAMETER_DATA_LENGTH = 231 };
+enum { RDM_ROOT_DEVICE = 0 };
 
 struct RdmData
 {
