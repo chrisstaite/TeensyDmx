@@ -237,6 +237,23 @@ void TeensyDmx::setChannels(
     }
 }
 
+// I am sure there is some code problems here but I wanted to suggest this feature for you to implement better than I can.
+void TeensyDmx::setChannelByArray(const uint8_t* values[]){
+    uint16_t currentAddress = 0;
+    while (currentAddress < DMX_BUFFER_SIZE) {
+        m_activeBuffer[currentAddress] = 0;
+        ++currentAddress;
+    }
+    for (uint16_t i = 0; i < 512; ++i) {
+        m_activeBuffer[currentAddress] = values[i];
+        ++currentAddress;
+    }
+    while (currentAddress < DMX_BUFFER_SIZE) {
+        m_activeBuffer[currentAddress] = 0;
+        ++currentAddress;
+    }
+}
+
 void TeensyDmx::nextTx()
 {
     if (m_state == State::BREAK) {
