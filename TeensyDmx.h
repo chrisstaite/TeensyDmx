@@ -93,7 +93,7 @@ class TeensyDmx
 
     // Returns true if a new frame has been received since the this was last called
     bool newFrame();
-    // Use for receive
+    // Get the buffer with the current channel data in
     const volatile uint8_t* getBuffer() const;
     // Use for receive with addresses from 0-511
     uint8_t getChannel(const uint16_t address);
@@ -150,18 +150,18 @@ class TeensyDmx
 
     // RDM handler functions
     void rdmDiscUniqueBranch();
-    uint16_t rdmDiscUnMute();
     uint16_t rdmDiscMute();
-    uint16_t rdmSetIdentifyDevice();
+    uint16_t rdmDiscUnMute();
+    uint16_t rdmGetDeviceInfo();
+    uint16_t rdmGetDeviceLabel();
     uint16_t rdmSetDeviceLabel();
+    uint16_t rdmGetDeviceModelDescription();
+    uint16_t rdmGetDMXStartAddress();
     uint16_t rdmSetDMXStartAddress();
     uint16_t rdmGetIdentifyDevice();
-    uint16_t rdmGetDeviceInfo();
+    uint16_t rdmSetIdentifyDevice();
     uint16_t rdmGetManufacturerLabel();
-    uint16_t rdmGetDeviceModelDescription();
-    uint16_t rdmGetDeviceLabel();
     uint16_t rdmGetSoftwareVersionLabel();
-    uint16_t rdmGetDMXStartAddress();
     uint16_t rdmGetSupportedParameters();
 
     uint16_t rdmCalculateChecksum(uint8_t* data, uint8_t length);
