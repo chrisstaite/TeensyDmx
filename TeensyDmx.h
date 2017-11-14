@@ -110,6 +110,11 @@ class TeensyDmx
     // This will always be null terminated, therefore can be up to 33 chars
     const char* getLabel() const;
 
+    // Return the comms status error counters
+    const volatile uint16_t getShortMessage() const;
+    const volatile uint16_t getChecksumFail() const;
+    const volatile uint16_t getLengthMismatch() const;
+
     // Use for transmit with addresses from 0-511
     // Will keep all other values as they were previously
     void setChannel(const uint16_t address, const uint8_t value);
@@ -134,7 +139,7 @@ class TeensyDmx
     TeensyDmx(const TeensyDmx&);
     TeensyDmx& operator=(const TeensyDmx&);
 
-    enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV, RDM_RECV_CHECKSUM_HI, RDM_RECV_CHECKSUM_LO };
+    enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV, RDM_RECV_CHECKSUM_HI, RDM_RECV_CHECKSUM_LO, RDM_RECV_POST_CHECKSUM };
 
     void startTransmit();
     void stopTransmit();
@@ -152,6 +157,8 @@ class TeensyDmx
     void rdmDiscUniqueBranch();
     uint16_t rdmDiscMute();
     uint16_t rdmDiscUnMute();
+    uint16_t rdmGetCommsStatus();
+    uint16_t rdmSetCommsStatus();
     uint16_t rdmGetDeviceInfo();
     uint16_t rdmGetDeviceLabel();
     uint16_t rdmSetDeviceLabel();
@@ -165,8 +172,13 @@ class TeensyDmx
     uint16_t rdmGetSupportedParameters();
 
     uint16_t rdmCalculateChecksum(uint8_t* data, uint8_t length);
-    bool isForAll(const byte* id);
+    bool isForMe(const byte* id);
     bool isForVendor(const byte* id);
+    bool isForAll(const byte* id);
+
+    void maybeIncrementShortMessage();
+    void maybeIncrementChecksumFail();
+    void maybeIncrementLengthMismatch();
 
     HardwareSerial& m_uart;
 
@@ -176,6 +188,9 @@ class TeensyDmx
     volatile uint8_t *m_inactiveBuffer;
     volatile uint16_t m_dmxBufferIndex;
     volatile unsigned int m_frameCount;
+    volatile uint16_t m_shortMessage;
+    volatile uint16_t m_checksumFail;
+    volatile uint16_t m_lengthMismatch;
     volatile bool m_newFrame;
     volatile bool m_rdmChange;
     Mode m_mode;
