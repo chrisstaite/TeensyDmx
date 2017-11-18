@@ -134,6 +134,8 @@ class TeensyDmx
     {
         setChannels(startAddress - 1, values, length);
     }
+    //setChannelByArray corresponding to my .cpp edit
+    void setChannelByArray(const uint8_t* values[])
 
   private:
     TeensyDmx(const TeensyDmx&);
