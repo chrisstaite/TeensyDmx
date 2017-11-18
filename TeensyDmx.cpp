@@ -468,7 +468,7 @@ void TeensyDmx::completeFrame()
         case State::RDM_RECV_CHECKSUM_HI:
             // Double check the previous partial message was an RDM one
             if ((m_mode == DMX_IN) &&
-                (reinterpret_cast<uint8_t*>(&m_rdmBuffer)[1] == E120_SC_SUB_MESSAGE)) {
+                (m_rdmBuffer.subStartCode == E120_SC_SUB_MESSAGE)) {
                 if (m_dmxBufferIndex < 9) {
                     // Destination UID needs 8, but we post increment, hence 9
                     maybeIncrementShortMessage();
@@ -536,13 +536,8 @@ void TeensyDmx::rdmDiscUniqueBranch()
         }
         // No break for DUB
         m_uart.begin(DMXSPEED, DMXFORMAT);
-        char* ptr = reinterpret_cast<char*>(&m_rdmBuffer);
-        for (m_dmxBufferIndex = 0;
-             m_dmxBufferIndex < sizeof(DiscUniqueBranchResponse);
-             ++m_dmxBufferIndex) {
-            m_uart.write(ptr[m_dmxBufferIndex]);
-            m_uart.flush();
-        }
+        m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer), sizeof(DiscUniqueBranchResponse));
+        m_uart.flush();
         startReceive();
     }
 }
@@ -816,10 +811,10 @@ uint16_t TeensyDmx::rdmGetSupportedParameters()
         putUInt16(&m_rdmBuffer.data[6], E120_COMMS_STATUS);
         if (m_rdm != nullptr) {
             for (int n = 0; n < m_rdm->additionalCommandsLength; ++n) {
-                putUInt16(&m_rdmBuffer.data[m_rdmBuffer.dataLength+n+n],
+                putUInt16(&m_rdmBuffer.data[m_rdmBuffer.dataLength],
                           m_rdm->additionalCommands[n]);
+                m_rdmBuffer.dataLength += 2;
             }
-            m_rdmBuffer.dataLength += 2 * (m_rdm->additionalCommandsLength);
         }
         return NACK_WAS_ACK;
     }
@@ -1049,12 +1044,8 @@ void TeensyDmx::respondMessage(uint16_t nackReason)
     m_uart.write(0);
     m_uart.flush();
     m_uart.begin(DMXSPEED, DMXFORMAT);
-    for (m_dmxBufferIndex = 0;
-         m_dmxBufferIndex < m_rdmBuffer.length;
-         ++m_dmxBufferIndex) {
-        m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer)[m_dmxBufferIndex]);
-        m_uart.flush();
-    }
+    m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer), m_rdmBuffer.length);
+    m_uart.flush();
     m_uart.write(checkSum >> 8);
     m_uart.flush();
     m_uart.write(checkSum & 0xff);
