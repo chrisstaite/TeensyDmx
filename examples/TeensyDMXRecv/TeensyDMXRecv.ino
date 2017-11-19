@@ -53,7 +53,15 @@ void loop() {
     }
     Serial.print("Device label: ");
     Serial.println(Dmx.getLabel());
+
     Serial.print("Start address: ");
     Serial.println(rdmData.startAddress, DEC);
+
+    Serial.print("Comms status - short messages: ");
+    Serial.print(Dmx.getShortMessage(), DEC);
+    Serial.print(", checksum fails: ");
+    Serial.print(Dmx.getChecksumFail(), DEC);
+    Serial.print(", length mismatches: ");
+    Serial.println(Dmx.getLengthMismatch(), DEC);
   }
 }

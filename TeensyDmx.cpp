@@ -1,5 +1,6 @@
 #include "TeensyDmx.h"
 #include "rdm.h"
+#include <limits>
 
 namespace {
 
@@ -11,7 +12,7 @@ constexpr uint32_t DMXFORMAT = SERIAL_8N2;
 constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
 
 // The DeviceInfoGetResponse structure (length = 19) has to be responsed for
-// E120_DEVICE_INFO.  See http://m_rdmBuffer.openlighting.org/pid/display?manufacturer=0&pid=96
+// E120_DEVICE_INFO.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=96
 struct DeviceInfoGetResponse
 {
   byte protocolMajor;
@@ -28,6 +29,17 @@ struct DeviceInfoGetResponse
 } __attribute__((__packed__));  // struct DeviceInfoGetResponse
 static_assert((sizeof(DeviceInfoGetResponse) == 19),
               "Invalid size for DeviceInfoGetResponse struct, is it packed?");
+
+// The CommsStatusGetResponse structure (length = 6) has to be responsed for
+// E120_COMMS_STATUS.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=21
+struct CommsStatusGetResponse
+{
+  uint16_t shortMessage;
+  uint16_t lengthMismatch;
+  uint16_t checksumFail;
+} __attribute__((__packed__));  // struct CommsStatusGetResponse
+static_assert((sizeof(CommsStatusGetResponse) == 6),
+              "Invalid size for CommsStatusGetResponse struct, is it packed?");
 
 struct DiscUniqueBranchRequest
 {
@@ -108,6 +120,9 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
     m_inactiveBuffer(m_dmxBuffer2),
     m_dmxBufferIndex(0),
     m_frameCount(0),
+    m_shortMessage(0),
+    m_checksumFail(0),
+    m_lengthMismatch(0),
     m_newFrame(false),
     m_rdmChange(false),
     m_mode(DMX_OFF),
@@ -172,6 +187,21 @@ bool TeensyDmx::isIdentify() const
 const char* TeensyDmx::getLabel() const
 {
     return m_deviceLabel;
+}
+
+const volatile uint16_t TeensyDmx::getShortMessage() const
+{
+    return m_shortMessage;
+}
+
+const volatile uint16_t TeensyDmx::getChecksumFail() const
+{
+    return m_checksumFail;
+}
+
+const volatile uint16_t TeensyDmx::getLengthMismatch() const
+{
+    return m_lengthMismatch;
 }
 
 void TeensyDmx::setMode(TeensyDmx::Mode mode)
@@ -241,16 +271,17 @@ void TeensyDmx::nextTx()
 {
     if (m_state == State::BREAK) {
         m_state = DMX_TX;
+        // Send the NSC
         m_uart.begin(DMXSPEED, DMXFORMAT);
         m_uart.write(0);
+        m_dmxBufferIndex = 0;
     } else if (m_state == State::DMX_TX) {
         // Check if we're at the end of the packet
         if (m_dmxBufferIndex == DMX_BUFFER_SIZE) {
-            // Send BREAK
             m_state = State::BREAK;
+            // Send BREAK
             m_uart.begin(BREAKSPEED, BREAKFORMAT);
             m_uart.write(0);
-            m_dmxBufferIndex = 0;
         } else {
             m_uart.write(m_activeBuffer[m_dmxBufferIndex]);
             ++m_dmxBufferIndex;
@@ -433,11 +464,24 @@ void TeensyDmx::completeFrame()
             }
             m_newFrame = true;
             break;
+        case State::RDM_RECV:
+        case State::RDM_RECV_CHECKSUM_HI:
+            // Double check the previous partial message was an RDM one
+            if ((m_mode == DMX_IN) &&
+                (m_rdmBuffer.subStartCode == E120_SC_SUB_MESSAGE)) {
+                if (m_dmxBufferIndex < 9) {
+                    // Destination UID needs 8, but we post increment, hence 9
+                    maybeIncrementShortMessage();
+                } else if (m_dmxBufferIndex < (m_rdmBuffer.length + 3)) {
+                    // Expected length plus checksum, but we post increment, hence 3
+                    maybeIncrementLengthMismatch();
+                }
+            }
+            // Fall through
         default:
-            // Unknown, ASC? frame
+            // Unknown, ASC? frame or was RDM packet
             break;
     }
-    m_dmxBufferIndex = 0;
     m_state = State::BREAK;
 }
 
@@ -490,14 +534,10 @@ void TeensyDmx::rdmDiscUniqueBranch()
         if (m_redePin != nullptr) {
             *m_redePin = 1;
         }
-        m_dmxBufferIndex = 0;
         // No break for DUB
         m_uart.begin(DMXSPEED, DMXFORMAT);
-        char* ptr = reinterpret_cast<char*>(&m_rdmBuffer);
-        for (uint16_t i = 0; i < sizeof(DiscUniqueBranchResponse); ++i) {
-            m_uart.write(ptr[i]);
-            m_uart.flush();
-        }
+        m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer), sizeof(DiscUniqueBranchResponse));
+        m_uart.flush();
         startReceive();
     }
 }
@@ -544,6 +584,20 @@ uint16_t TeensyDmx::rdmSetIdentifyDevice()
     return NACK_WAS_ACK;
 }
 
+uint16_t TeensyDmx::rdmSetCommsStatus()
+{
+    if (m_rdmBuffer.dataLength != 0) {
+        // Oversized data
+        return E120_NR_FORMAT_ERROR;
+    }
+    m_shortMessage = 0;
+    m_lengthMismatch = 0;
+    m_checksumFail = 0;
+    m_rdmChange = true;
+    m_rdmBuffer.dataLength = 0;
+    return NACK_WAS_ACK;
+}
+
 uint16_t TeensyDmx::rdmSetDeviceLabel()
 {
     if (m_rdmBuffer.dataLength > RDM_MAX_STRING_LENGTH) {
@@ -574,6 +628,28 @@ uint16_t TeensyDmx::rdmSetDMXStartAddress()
     m_rdm->startAddress = newStartAddress;
     m_rdmBuffer.dataLength = 0;
     m_rdmChange = true;
+    return NACK_WAS_ACK;
+}
+
+uint16_t TeensyDmx::rdmGetCommsStatus()
+{
+    if (m_rdmBuffer.dataLength > 0) {
+        // Unexpected data
+        return E120_NR_FORMAT_ERROR;
+    }
+    if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
+        // No sub-devices supported
+        return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
+    }
+    // return all comms status data
+    // The data has to be responsed in the Data buffer.
+    CommsStatusGetResponse *commsStatus =
+        reinterpret_cast<CommsStatusGetResponse*>(m_rdmBuffer.data);
+
+    putUInt16(&commsStatus->shortMessage, m_shortMessage);
+    putUInt16(&commsStatus->lengthMismatch, m_lengthMismatch);
+    putUInt16(&commsStatus->checksumFail, m_checksumFail);
+    m_rdmBuffer.dataLength = sizeof(CommsStatusGetResponse);
     return NACK_WAS_ACK;
 }
 
@@ -728,17 +804,18 @@ uint16_t TeensyDmx::rdmGetSupportedParameters()
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
-        if (m_rdm == nullptr) {
-            m_rdmBuffer.dataLength = 6;
-        } else {
-            m_rdmBuffer.dataLength = 2 * (3 + m_rdm->additionalCommandsLength);
-            for (int n = 0; n < m_rdm->additionalCommandsLength; ++n) {
-                putUInt16(&m_rdmBuffer.data[6+n+n], m_rdm->additionalCommands[n]);
-            }
-        }
+        m_rdmBuffer.dataLength = 8;
         putUInt16(&m_rdmBuffer.data[0], E120_MANUFACTURER_LABEL);
         putUInt16(&m_rdmBuffer.data[2], E120_DEVICE_MODEL_DESCRIPTION);
         putUInt16(&m_rdmBuffer.data[4], E120_DEVICE_LABEL);
+        putUInt16(&m_rdmBuffer.data[6], E120_COMMS_STATUS);
+        if (m_rdm != nullptr) {
+            for (int n = 0; n < m_rdm->additionalCommandsLength; ++n) {
+                putUInt16(&m_rdmBuffer.data[m_rdmBuffer.dataLength],
+                          m_rdm->additionalCommands[n]);
+                m_rdmBuffer.dataLength += 2;
+            }
+        }
         return NACK_WAS_ACK;
     }
 }
@@ -756,15 +833,9 @@ uint16_t TeensyDmx::rdmCalculateChecksum(uint8_t* data, uint8_t length)
     return checksum;
 }
 
-bool TeensyDmx::isForAll(const byte* id)
+bool TeensyDmx::isForMe(const byte* id)
 {
-    for (int i = 0; i < RDM_UID_LENGTH; ++i) {
-        if (*id != 0xff) {
-            return false;
-        }
-        ++id;
-    }
-    return true;
+    return (memcmp(id, m_rdm->uid, RDM_UID_LENGTH) == 0);
 }
 
 bool TeensyDmx::isForVendor(const byte* id)
@@ -782,6 +853,51 @@ bool TeensyDmx::isForVendor(const byte* id)
     return true;
 }
 
+bool TeensyDmx::isForAll(const byte* id)
+{
+    for (int i = 0; i < RDM_UID_LENGTH; ++i) {
+        if (*id != 0xff) {
+            return false;
+        }
+        ++id;
+    }
+    return true;
+}
+
+void TeensyDmx::maybeIncrementShortMessage()
+{
+    // RDM message and not complete destination UID
+    // We only call this when we get a message without a destination UID
+    // Ensure we don't overflow
+    if (m_shortMessage < std::numeric_limits<uint16_t>::max()) {
+        ++m_shortMessage;
+    }
+}
+
+void TeensyDmx::maybeIncrementLengthMismatch()
+{
+    // RDM message for me, vendorcast or broadcast where length didn't match message length plus checksum, either too long or too short
+    // We only call this when we get a message with an invalid length
+    if (isForMe(m_rdmBuffer.destId) || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
+        // Ensure we don't overflow
+        if (m_lengthMismatch < std::numeric_limits<uint16_t>::max()) {
+            ++m_lengthMismatch;
+        }
+    }
+}
+
+void TeensyDmx::maybeIncrementChecksumFail()
+{
+    // RDM message for me, vendorcast or broadcast where checksum was incorrect
+    // We only call this when we get an invalid checksum
+    if (isForMe(m_rdmBuffer.destId) || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
+          // Ensure we don't overflow
+          if (m_checksumFail < std::numeric_limits<uint16_t>::max()) {
+              ++m_checksumFail;
+          }
+    }
+}
+
 void TeensyDmx::processRDM()
 {
     if (m_rdm == nullptr) {
@@ -793,8 +909,8 @@ void TeensyDmx::processRDM()
     m_state = IDLE;
     unsigned long timingStart = micros();
 
-    bool isForMe = (memcmp(m_rdmBuffer.destId, m_rdm->uid, RDM_UID_LENGTH) == 0);
-    if (isForMe || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
+    bool forMe = isForMe(m_rdmBuffer.destId);
+    if (forMe || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
         bool sendResponse = true;
         uint16_t parameter = swapUInt16(m_rdmBuffer.parameter);
         if (m_rdmBuffer.cmdClass == E120_DISCOVERY_COMMAND) {
@@ -844,6 +960,9 @@ void TeensyDmx::processRDM()
                 case E120_SOFTWARE_VERSION_LABEL:
                     nackReason = rdmGetSoftwareVersionLabel();
                     break;
+                case E120_COMMS_STATUS:
+                    nackReason = rdmGetCommsStatus();
+                    break;
                 default:
                     nackReason = E120_NR_UNKNOWN_PID;
                     break;
@@ -858,6 +977,9 @@ void TeensyDmx::processRDM()
                     break;
                 case E120_DMX_START_ADDRESS:
                     nackReason = rdmSetDMXStartAddress();
+                    break;
+                case E120_COMMS_STATUS:
+                    nackReason = rdmSetCommsStatus();
                     break;
                 case E120_SUPPORTED_PARAMETERS:
                 case E120_DEVICE_INFO:
@@ -874,7 +996,7 @@ void TeensyDmx::processRDM()
             // Unknown command class
             nackReason = E120_NR_FORMAT_ERROR;
         }
-        if (isForMe && sendResponse) {
+        if (forMe && sendResponse) {
             // TIMING: don't send too fast, min: 176 microseconds
             timingStart = micros() - timingStart;
             if (timingStart < 176) {
@@ -908,7 +1030,6 @@ void TeensyDmx::respondMessage(uint16_t nackReason)
     m_rdmBuffer.length = m_rdmBuffer.dataLength + RDM_PACKET_SIZE_NO_PD;  // total packet length
 
     ++m_rdmBuffer.cmdClass;
-    // Parameter
 
     uint16_t checkSum = rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
                                              m_rdmBuffer.length);
@@ -918,16 +1039,13 @@ void TeensyDmx::respondMessage(uint16_t nackReason)
     if (m_redePin != nullptr) {
         *m_redePin = 1;
     }
-    m_dmxBufferIndex = 0;
 
     m_uart.begin(RDM_BREAKSPEED, BREAKFORMAT);
     m_uart.write(0);
     m_uart.flush();
     m_uart.begin(DMXSPEED, DMXFORMAT);
-    for (uint16_t i = 0; i < m_rdmBuffer.length; ++i) {
-        m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer)[i]);
-        m_uart.flush();
-    }
+    m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer), m_rdmBuffer.length);
+    m_uart.flush();
     m_uart.write(checkSum >> 8);
     m_uart.flush();
     m_uart.write(checkSum & 0xff);
@@ -1443,7 +1561,6 @@ void TeensyDmx::startReceive()
     }
 #endif
 
-    m_dmxBufferIndex = 0;
     m_state = State::IDLE;
 }
 
@@ -1550,9 +1667,12 @@ void TeensyDmx::handleByte(uint8_t c)
             {
                 case 0:
                     m_state = State::DMX_RECV;
+                    // In DMX mode we don't keep the start code
+                    m_dmxBufferIndex = 0;
                     break;
                 case E120_SC_RDM:
                     m_rdmNeedsProcessing = false;
+                    // Store the start code and then increment
                     reinterpret_cast<uint8_t*>(&m_rdmBuffer)[0] = c;
                     m_dmxBufferIndex = 1;
                     m_state = State::RDM_RECV;
@@ -1580,15 +1700,23 @@ void TeensyDmx::handleByte(uint8_t c)
             break;
         case State::RDM_RECV_CHECKSUM_HI:
             m_rdmChecksum = (c << 8);
+            ++m_dmxBufferIndex;
             m_state = State::RDM_RECV_CHECKSUM_LO;
             break;
         case State::RDM_RECV_CHECKSUM_LO:
             m_rdmChecksum = (m_rdmChecksum | c);
+            ++m_dmxBufferIndex;
             if (m_rdmChecksum ==
                     rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
                                          m_rdmBuffer.length)) {
                 m_rdmNeedsProcessing = true;
+            } else {
+                maybeIncrementChecksumFail();
             }
+            m_state = State::RDM_RECV_POST_CHECKSUM;
+            break;
+        case State::RDM_RECV_POST_CHECKSUM:
+            maybeIncrementLengthMismatch();
             m_state = State::IDLE;
             break;
         case State::DMX_RECV:
