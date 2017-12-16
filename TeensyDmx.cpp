@@ -900,7 +900,7 @@ void TeensyDmx::maybeIncrementChecksumFail()
 }
 
 
-void TeensyDmx::sendRDMIdentifyDevice(byte *uid, bool identify_device) {
+void TeensyDmx::sendRDMSetIdentifyDevice(byte *uid, bool identify_device) {
     if (identify_device) {
         m_rdmBuffer.data[0] = 1;
     } else {
@@ -909,6 +909,17 @@ void TeensyDmx::sendRDMIdentifyDevice(byte *uid, bool identify_device) {
     m_rdmBuffer.dataLength = 1;
 
     buildSendRDMMessage(uid, E120_SET_COMMAND, E120_IDENTIFY_DEVICE);
+}
+
+
+void TeensyDmx::sendRDMSetDmxStartAddress(byte *uid, uint16_t dmx_address) {
+    // TODO: Sanity check the value being set
+    if (dmx_address <= DMX_BUFFER_SIZE) {
+        putUInt16(&m_rdmBuffer.data[0], dmx_address);
+        m_rdmBuffer.dataLength = 2;
+
+        buildSendRDMMessage(uid, E120_SET_COMMAND, E120_IDENTIFY_DEVICE);
+    }
 }
 
 

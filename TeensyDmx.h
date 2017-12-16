@@ -135,7 +135,8 @@ class TeensyDmx
         setChannels(startAddress - 1, values, length);
     }
 
-    void sendRDMIdentifyDevice(byte *uid, bool identify_device);
+    void sendRDMSetIdentifyDevice(byte *uid, bool identify_device);
+    void sendRDMSetDmxStartAddress(byte *uid, uint16_t dmx_address);
 
   private:
     TeensyDmx(const TeensyDmx&);

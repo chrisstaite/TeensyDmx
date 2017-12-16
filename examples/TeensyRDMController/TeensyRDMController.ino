@@ -40,8 +40,8 @@ void setup() {
 void loop() {
   //Dmx.setChannels(0, DMXVal, 1);
   //Dmx.loop();
-  Dmx.sendRDMIdentifyDevice(theirUid, true);
+  Dmx.sendRDMSetIdentifyDevice(theirUid, true);
   delay(1000);
-  Dmx.sendRDMIdentifyDevice(theirUid, false);
+  Dmx.sendRDMSetIdentifyDevice(theirUid, false);
   delay(1000);
 }
