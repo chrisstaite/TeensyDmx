@@ -289,6 +289,7 @@ void TeensyDmx::nextTx()
     }
 }
 
+
 void uart0_status_isr();  // Back reference to serial1.c
 void UART0TxStatus()
 {
@@ -898,6 +899,19 @@ void TeensyDmx::maybeIncrementChecksumFail()
     }
 }
 
+
+void TeensyDmx::sendRDMIdentifyDevice(byte *uid, bool identify_device) {
+    if (identify_device) {
+        m_rdmBuffer.data[0] = 1;
+    } else {
+        m_rdmBuffer.data[0] = 0;
+    }
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_IDENTIFY_DEVICE);
+}
+
+
 void TeensyDmx::processRDM()
 {
     if (m_rdm == nullptr) {
@@ -1017,8 +1031,6 @@ void TeensyDmx::respondMessage(uint16_t nackReason)
         nackReason = E120_NR_HARDWARE_FAULT;
     }
 
-    // no need to set these data fields:
-    // StartCode, SubStartCode
     m_rdmBuffer.messageCount = 0;  // Number of queued messages
     if (nackReason == NACK_WAS_ACK) {
         m_rdmBuffer.responseType = E120_RESPONSE_TYPE_ACK;
@@ -1027,9 +1039,41 @@ void TeensyDmx::respondMessage(uint16_t nackReason)
         m_rdmBuffer.dataLength = 2;
         putUInt16(&m_rdmBuffer.data, nackReason);
     }
-    m_rdmBuffer.length = m_rdmBuffer.dataLength + RDM_PACKET_SIZE_NO_PD;  // total packet length
 
     ++m_rdmBuffer.cmdClass;
+
+    sendRDMMessage();
+}
+
+
+void TeensyDmx::buildSendRDMMessage(byte *uid, uint8_t commandClass, uint16_t pid) {
+    if (m_rdm != nullptr) {
+        m_rdmBuffer.startCode = E120_SC_RDM;
+        m_rdmBuffer.subStartCode = E120_SC_SUB_MESSAGE;
+
+        memcpy(m_rdmBuffer.destId, uid, RDM_UID_LENGTH);
+        memcpy(m_rdmBuffer.sourceId, m_rdm->uid, RDM_UID_LENGTH);
+
+        m_rdmBuffer.messageCount = 0; // Number of queued messages
+        m_rdmBuffer.responseType = 1; // Port 1
+        m_rdmBuffer.transNo = 0;
+        // Parameter
+        putUInt16(&m_rdmBuffer.parameter, pid);
+
+        m_rdmBuffer.cmdClass = commandClass;
+
+        sendRDMMessage();
+    }
+}
+
+
+void TeensyDmx::sendRDMMessage()
+{
+    m_state = IDLE;
+    // no need to set these data fields:
+    // StartCode, SubStartCode
+
+    m_rdmBuffer.length = m_rdmBuffer.dataLength + RDM_PACKET_SIZE_NO_PD;  // total packet length
 
     uint16_t checkSum = rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
                                              m_rdmBuffer.length);

@@ -135,6 +135,8 @@ class TeensyDmx
         setChannels(startAddress - 1, values, length);
     }
 
+    void sendRDMIdentifyDevice(byte *uid, bool identify_device);
+
   private:
     TeensyDmx(const TeensyDmx&);
     TeensyDmx& operator=(const TeensyDmx&);
@@ -149,6 +151,8 @@ class TeensyDmx
     void completeFrame();  // Called at error ISR during recv
     void processRDM();
     void respondMessage(uint16_t nackReason);
+    void buildSendRDMMessage(byte *uid, uint8_t commandClass, uint16_t pid);
+    void sendRDMMessage();
     void handleByte(uint8_t c);
 
     void nextTx();
