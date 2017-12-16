@@ -31,7 +31,8 @@ TeensyDmx Dmx(Serial1, &rdmData, DMX_REDE);
 
 byte DMXVal[] = {50};
 
-byte theirUid[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+// Broadcast to all devices
+byte theirUid[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 void setup() {
   Dmx.setMode(TeensyDmx::DMX_OUT);
