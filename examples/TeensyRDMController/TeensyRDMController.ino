@@ -31,6 +31,10 @@ TeensyDmx Dmx(Serial1, &rdmData, DMX_REDE);
 
 byte DMXVal[] = {50};
 
+enum Status { IDENTIFY_ON, IDENTIFY_ON_IDLE, IDENTIFY_OFF, IDENTIFY_OFF_IDLE };
+Status currentState = IDENTIFY_ON;
+unsigned long lastAction = 0;
+
 // Broadcast to all devices
 byte theirUid[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
@@ -40,9 +44,28 @@ void setup() {
 
 void loop() {
   //Dmx.setChannels(0, DMXVal, 1);
-  //Dmx.loop();
-  Dmx.sendRDMSetIdentifyDevice(theirUid, true);
-  delay(1000);
-  Dmx.sendRDMSetIdentifyDevice(theirUid, false);
-  delay(1000);
+  switch (currentState)
+  {
+    case IDENTIFY_ON:
+      lastAction = millis();
+      Dmx.sendRDMSetIdentifyDevice(theirUid, true);
+      currentState = IDENTIFY_ON_IDLE;
+      break;
+    case IDENTIFY_ON_IDLE:
+      if ((millis() - lastAction) > 1000) {
+        currentState = IDENTIFY_OFF;
+      }
+      break;
+    case IDENTIFY_OFF:
+      lastAction = millis();
+      Dmx.sendRDMSetIdentifyDevice(theirUid, false);
+      currentState = IDENTIFY_OFF_IDLE;
+      break;
+    case IDENTIFY_OFF_IDLE:
+      if ((millis() - lastAction) > 1000) {
+        currentState = IDENTIFY_ON;
+      }
+      break;
+  }
+  Dmx.loop();
 }
