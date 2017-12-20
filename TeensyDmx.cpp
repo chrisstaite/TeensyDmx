@@ -233,9 +233,7 @@ void TeensyDmx::setMode(TeensyDmx::Mode mode)
             startTransmit();
             break;
         default:
-            if (m_redePin != nullptr) {
-                *m_redePin = 0;  // Off puts in receive state so as to be passive
-            }
+            setDirection(false); // Off puts in receive state so as to be passive
             break;
     }
 }
@@ -363,9 +361,7 @@ void UART5TxStatus()
 
 void TeensyDmx::startTransmit()
 {
-    if (m_redePin != nullptr) {
-        *m_redePin = 1;
-    }
+    setDirection(true);
 
     m_dmxBufferIndex = 0;
 
@@ -531,9 +527,7 @@ void TeensyDmx::rdmDiscUniqueBranch()
 
         // Send reply
         stopReceive();
-        if (m_redePin != nullptr) {
-            *m_redePin = 1;
-        }
+        setDirection(true);
         // No break for DUB
         m_uart.begin(DMXSPEED, DMXFORMAT);
         m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer), sizeof(DiscUniqueBranchResponse));
@@ -1036,9 +1030,7 @@ void TeensyDmx::respondMessage(uint16_t nackReason)
 
     // Send reply
     stopReceive();
-    if (m_redePin != nullptr) {
-        *m_redePin = 1;
-    }
+    setDirection(true);
 
     m_uart.begin(RDM_BREAKSPEED, BREAKFORMAT);
     m_uart.write(0);
@@ -1381,9 +1373,7 @@ void UART5RxStatus()
 
 void TeensyDmx::startReceive()
 {
-    if (m_redePin != nullptr) {
-        *m_redePin = 0;
-    }
+    setDirection(false);
 
     // UART Initialisation
     m_uart.begin(250000);
@@ -1656,6 +1646,12 @@ void TeensyDmx::stopReceive()
 #endif
     }
 #endif
+}
+
+inline void TeensyDmx::setDirection(bool transmit) {
+    if (m_redePin != nullptr) {
+        *m_redePin = (transmit ? 1 : 0);
+    }
 }
 
 void TeensyDmx::handleByte(uint8_t c)
