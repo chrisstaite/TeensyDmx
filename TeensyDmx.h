@@ -56,6 +56,8 @@ struct RdmData
 static_assert((sizeof(RdmData) == 255),
               "Invalid size for RdmData struct, is it packed?");
 
+typedef void (*rdmControllerCallback)(RdmData*);
+
 struct RdmInit
 {
     const byte *uid;
@@ -69,6 +71,7 @@ struct RdmInit
     uint16_t startAddress;
     const uint16_t additionalCommandsLength;
     const uint16_t *additionalCommands;
+    rdmControllerCallback controllerCallback;
 };
 
 class TeensyDmx
@@ -137,6 +140,7 @@ class TeensyDmx
 
     void sendRDMSetIdentifyDevice(byte *uid, bool identify_device);
     void sendRDMSetDmxStartAddress(byte *uid, uint16_t dmx_address);
+    void sendRDMGetManufacturerLabel(byte *uid);
 
   private:
     TeensyDmx(const TeensyDmx&);

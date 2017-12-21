@@ -13,6 +13,19 @@
 // The ID below is designated as a prototyping ID.
 byte myUid[] = {0x7f, 0xf0, 0x20, 0x12, 0x00, 0x00};
 
+void printRdm(RdmData *data) {
+  Serial.println("Decoding RDM:");
+
+  Serial.print("Length: ");
+  Serial.println(data->length);
+
+  for(int i = 0; i < data->dataLength; i++)
+  {
+     Serial.print(char(data->data[i]));
+  }
+  Serial.println("");
+}
+
 struct RdmInit rdmData {
   myUid,
   0x00000100,
@@ -24,7 +37,8 @@ struct RdmInit rdmData {
   1,  // The DMX footprint
   1,  // The DMX startAddress - only used for RDM
   0,  // Additional commands length for RDM
-  0   // Definition of additional commands
+  0,   // Definition of additional commands
+  &printRdm
 };
 
 TeensyDmx Dmx(Serial1, &rdmData, DMX_REDE);
@@ -35,7 +49,7 @@ enum Status { IDENTIFY_ON, IDENTIFY_ON_IDLE, IDENTIFY_OFF, IDENTIFY_OFF_IDLE };
 Status currentState = IDENTIFY_ON;
 unsigned long lastAction = 0;
 
-// Broadcast to all devices
+// Broadcast to all devices, broadcasts don't generate a response
 byte theirUid[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 void setup() {
@@ -48,7 +62,8 @@ void loop() {
   {
     case IDENTIFY_ON:
       lastAction = millis();
-      Dmx.sendRDMSetIdentifyDevice(theirUid, true);
+      //Dmx.sendRDMSetIdentifyDevice(theirUid, true);
+      Dmx.sendRDMGetManufacturerLabel(theirUid);
       currentState = IDENTIFY_ON_IDLE;
       break;
     case IDENTIFY_ON_IDLE:
@@ -58,7 +73,8 @@ void loop() {
       break;
     case IDENTIFY_OFF:
       lastAction = millis();
-      Dmx.sendRDMSetIdentifyDevice(theirUid, false);
+      //Dmx.sendRDMSetIdentifyDevice(theirUid, false);
+      Dmx.sendRDMGetManufacturerLabel(theirUid);
       currentState = IDENTIFY_OFF_IDLE;
       break;
     case IDENTIFY_OFF_IDLE:
