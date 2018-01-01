@@ -146,7 +146,7 @@ class TeensyDmx
     void startReceive();
     void stopReceive();
 
-    inline void setDirection(bool transmit);
+    void setDirection(bool transmit);
 
     void completeFrame();  // Called at error ISR during recv
     void processRDM();
