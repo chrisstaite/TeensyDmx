@@ -36,6 +36,8 @@ enum { RDM_MAX_STRING_LENGTH = 32 };
 enum { RDM_MAX_PARAMETER_DATA_LENGTH = 231 };
 enum { RDM_ROOT_DEVICE = 0 };
 
+enum CallbackStatus { CB_SUCCESS, CB_RDM_BROADCAST, CB_RDM_TIMEOUT, CB_RDM_CHECKSUM_ERROR };
+
 struct RdmData
 {
   byte     startCode;    // Start Code 0xCC for RDM
@@ -56,7 +58,9 @@ struct RdmData
 static_assert((sizeof(RdmData) == 255),
               "Invalid size for RdmData struct, is it packed?");
 
-typedef void (*rdmControllerCallback)(RdmData*);
+typedef void (*rdmControllerCallback)(CallbackStatus, RdmData*);
+
+typedef void (*rdmDiscoveryCallback)(CallbackStatus, byte*, uint32_t);
 
 struct RdmInit
 {
@@ -71,6 +75,7 @@ struct RdmInit
     uint16_t startAddress;
     const uint16_t additionalCommandsLength;
     const uint16_t *additionalCommands;
+    rdmDiscoveryCallback discoveryCallback;
     rdmControllerCallback controllerCallback;
 };
 
@@ -138,6 +143,9 @@ class TeensyDmx
         setChannels(startAddress - 1, values, length);
     }
 
+    void sendRDMDiscMute(byte *uid);
+    void sendRDMDiscUnMute(byte *uid);
+    void sendRDMDiscUniqueBranch(byte *lower_uid, byte *upper_uid);
     void sendRDMSetIdentifyDevice(byte *uid, bool identify_device);
     void sendRDMSetDmxStartAddress(byte *uid, uint16_t dmx_address);
     void sendRDMGetManufacturerLabel(byte *uid);
@@ -146,7 +154,13 @@ class TeensyDmx
     TeensyDmx(const TeensyDmx&);
     TeensyDmx& operator=(const TeensyDmx&);
 
-    enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV, RDM_RECV_CHECKSUM_HI, RDM_RECV_CHECKSUM_LO, RDM_RECV_POST_CHECKSUM };
+    enum State { IDLE, BREAK,
+                 DMX_TX,
+                 DMX_RECV, DMX_COMPLETE,
+                 RDM_RECV, RDM_RECV_CHECKSUM_HI, RDM_RECV_CHECKSUM_LO, RDM_RECV_POST_CHECKSUM,
+                 RDM_DUB_PREAMBLE, RDM_DUB_RECV, RDM_DUB_CHECKSUM_3, RDM_DUB_CHECKSUM_2, RDM_DUB_CHECKSUM_1, RDM_DUB_CHECKSUM_0, RDM_DUB_POST_CHECKSUM };
+
+    enum ControllerState { CONTROLLER_IDLE, RDM_DUB, RDM_DUB_COLLISION, RDM_BROADCAST, RDM_TIMEOUT, RDM_CHECKSUM_ERROR, RDM_MESSAGE };
 
     void startTransmit();
     void stopTransmit();
@@ -155,6 +169,7 @@ class TeensyDmx
 
     void completeFrame();  // Called at error ISR during recv
     void processRDM();
+    void processDiscovery();
     void respondMessage(uint16_t nackReason);
     void buildSendRDMMessage(byte *uid, uint8_t commandClass, uint16_t pid);
     void sendRDMMessage();
@@ -204,6 +219,7 @@ class TeensyDmx
     volatile bool m_rdmChange;
     Mode m_mode;
     State m_state;
+    ControllerState m_controllerState;
     volatile uint8_t* m_redePin;
     bool m_rdmMute;
     bool m_identifyMode;
