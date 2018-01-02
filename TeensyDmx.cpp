@@ -233,9 +233,7 @@ void TeensyDmx::setMode(TeensyDmx::Mode mode)
             startTransmit();
             break;
         default:
-            if (m_redePin != nullptr) {
-                *m_redePin = 0;  // Off puts in receive state so as to be passive
-            }
+            setDirection(false); // Off puts in receive state so as to be passive
             break;
     }
 }
@@ -363,9 +361,7 @@ void UART5TxStatus()
 
 void TeensyDmx::startTransmit()
 {
-    if (m_redePin != nullptr) {
-        *m_redePin = 1;
-    }
+    setDirection(true);
 
     m_dmxBufferIndex = 0;
 
@@ -531,9 +527,7 @@ void TeensyDmx::rdmDiscUniqueBranch()
 
         // Send reply
         stopReceive();
-        if (m_redePin != nullptr) {
-            *m_redePin = 1;
-        }
+        setDirection(true);
         // No break for DUB
         m_uart.begin(DMXSPEED, DMXFORMAT);
         m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer), sizeof(DiscUniqueBranchResponse));
@@ -1036,9 +1030,7 @@ void TeensyDmx::respondMessage(uint16_t nackReason)
 
     // Send reply
     stopReceive();
-    if (m_redePin != nullptr) {
-        *m_redePin = 1;
-    }
+    setDirection(true);
 
     m_uart.begin(RDM_BREAKSPEED, BREAKFORMAT);
     m_uart.write(0);
@@ -1064,8 +1056,9 @@ void UART0RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART0_S1 & UART_S1_FE)
+    if (UART0_S1 & UART_S1_FE) {
         (void) UART0_D;
+    }
 
     uartInstances[0]->completeFrame();
 }
@@ -1079,8 +1072,9 @@ void UART1RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART1_S1 & UART_S1_FE)
+    if (UART1_S1 & UART_S1_FE) {
         (void) UART1_D;
+    }
 
     uartInstances[1]->completeFrame();
 }
@@ -1094,8 +1088,9 @@ void UART2RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART2_S1 & UART_S1_FE)
+    if (UART2_S1 & UART_S1_FE) {
         (void) UART2_D;
+    }
 
     uartInstances[2]->completeFrame();
 }
@@ -1110,8 +1105,9 @@ void UART3RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART3_S1 & UART_S1_FE)
+    if (UART3_S1 & UART_S1_FE) {
         (void) UART3_D;
+    }
 
     uartInstances[3]->completeFrame();
 }
@@ -1127,8 +1123,9 @@ void UART4RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART4_S1 & UART_S1_FE)
+    if (UART4_S1 & UART_S1_FE) {
         (void) UART4_D;
+    }
 
     uartInstances[4]->completeFrame();
 }
@@ -1144,8 +1141,9 @@ void UART5RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART5_S1 & UART_S1_FE)
+    if (UART5_S1 & UART_S1_FE) {
         (void) UART5_D;
+    }
 
     uartInstances[5]->completeFrame();
 }
@@ -1345,22 +1343,22 @@ void UART5RxStatus()
 {
     uint8_t s = UART5_S1;
 #ifdef HAS_KINETISK_UART5_FIFO
-	if (s & (UART_S1_RDRF | UART_S1_IDLE)) {
-		__disable_irq();
-		uint8_t avail = UART5_RCFIFO;
-		if (avail == 0) {
-			(void) UART5_D;
-			UART5_CFIFO = UART_CFIFO_RXFLUSH;
-			__enable_irq();
-		} else {
-			__enable_irq();
-			do {
-			    uartInstances[5]->handleByte(UART5_D);
-			} while (--avail);
-		}
-	}
+    if (s & (UART_S1_RDRF | UART_S1_IDLE)) {
+        __disable_irq();
+        uint8_t avail = UART5_RCFIFO;
+        if (avail == 0) {
+            (void) UART5_D;
+            UART5_CFIFO = UART_CFIFO_RXFLUSH;
+            __enable_irq();
+        } else {
+            __enable_irq();
+            do {
+                uartInstances[5]->handleByte(UART5_D);
+            } while (--avail);
+        }
+    }
 #else
-	if (s & UART_S1_RDRF) {
+    if (s & UART_S1_RDRF) {
         uartInstances[5]->handleByte(UART5_D);
     }
 #endif
@@ -1381,9 +1379,7 @@ void UART5RxStatus()
 
 void TeensyDmx::startReceive()
 {
-    if (m_redePin != nullptr) {
-        *m_redePin = 0;
-    }
+    setDirection(false);
 
     // UART Initialisation
     m_uart.begin(250000);
@@ -1656,6 +1652,12 @@ void TeensyDmx::stopReceive()
 #endif
     }
 #endif
+}
+
+inline void TeensyDmx::setDirection(bool transmit) {
+    if (m_redePin != nullptr) {
+        *m_redePin = (transmit ? 1 : 0);
+    }
 }
 
 void TeensyDmx::handleByte(uint8_t c)
