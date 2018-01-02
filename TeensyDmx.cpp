@@ -940,6 +940,20 @@ void TeensyDmx::sendRDMGetManufacturerLabel(byte *uid) {
 }
 
 
+void TeensyDmx::sendRDMGetDeviceLabel(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_DEVICE_LABEL);
+}
+
+
+void TeensyDmx::sendRDMGetDeviceModelDescription(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_DEVICE_MODEL_DESCRIPTION);
+}
+
+
 void TeensyDmx::sendRDMSetIdentifyDevice(byte *uid, bool identify_device) {
     if (identify_device) {
         m_rdmBuffer.data[0] = 1;
@@ -1958,12 +1972,6 @@ void TeensyDmx::loop()
                     {
                       Serial.print(dub_response->maskedDevID[i], HEX);
                       Serial.print(" ");
-                    }
-                    Serial.println("");
-                    for(int i = 0; i < 6; i++)
-                    {
-                      Serial.print((dub_response->maskedDevID[i+i] & dub_response->maskedDevID[i+i+1]), HEX);
-                      Serial.print(":");
                     }
                     Serial.println("");
                 }

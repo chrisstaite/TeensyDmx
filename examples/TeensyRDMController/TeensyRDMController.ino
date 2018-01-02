@@ -121,7 +121,6 @@ void loop() {
       lastAction = millis();
       //Dmx.sendRDMSetIdentifyDevice(theirUid, true);
       Dmx.sendRDMGetManufacturerLabel(theirUid);
-      //Dmx.sendRDMDiscUnMute(upperUid);
       currentState = IDENTIFY_ON_IDLE;
       break;
     case IDENTIFY_ON_IDLE:
@@ -132,8 +131,7 @@ void loop() {
     case IDENTIFY_OFF:
       lastAction = millis();
       //Dmx.sendRDMSetIdentifyDevice(theirUid, false);
-      Dmx.sendRDMGetManufacturerLabel(theirUid);
-      //Dmx.sendRDMDiscUniqueBranch(lowerUid, upperUid);
+      Dmx.sendRDMGetDeviceModelDescription(theirUid);
       currentState = IDENTIFY_OFF_IDLE;
       break;
     case IDENTIFY_OFF_IDLE:

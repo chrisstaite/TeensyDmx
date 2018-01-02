@@ -149,6 +149,8 @@ class TeensyDmx
     void sendRDMSetIdentifyDevice(byte *uid, bool identify_device);
     void sendRDMSetDmxStartAddress(byte *uid, uint16_t dmx_address);
     void sendRDMGetManufacturerLabel(byte *uid);
+    void sendRDMGetDeviceLabel(byte *uid);
+    void sendRDMGetDeviceModelDescription(byte *uid);
 
   private:
     TeensyDmx(const TeensyDmx&);
