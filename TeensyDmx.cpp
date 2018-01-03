@@ -30,6 +30,27 @@ struct DeviceInfoGetResponse
 static_assert((sizeof(DeviceInfoGetResponse) == 19),
               "Invalid size for DeviceInfoGetResponse struct, is it packed?");
 
+// The DmxPersonalityGetResponse structure (length = 2) has to be responsed for
+// E120_DMX_PERSONALITY.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=224
+struct DmxPersonalityGetResponse
+{
+  byte currentPersonality;
+  byte personalityCount;
+} __attribute__((__packed__));  // struct DmxPersonalityGetResponse
+static_assert((sizeof(DmxPersonalityGetResponse) == 2),
+              "Invalid size for DmxPersonalityGetResponse struct, is it packed?");
+
+// The DmxPersonalityDescriptionGetResponse structure (length = 3 to 35) has to be responsed for
+// E120_DMX_PERSONALITY_DESCRIPTION.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=225
+struct DmxPersonalityDescriptionGetResponse
+{
+  byte personality;
+  uint16_t slotsRequired;
+  char name[RDM_MAX_STRING_LENGTH];
+} __attribute__((__packed__));  // struct DmxPersonalityDescriptionGetResponse
+static_assert((sizeof(DmxPersonalityDescriptionGetResponse) == 35),
+              "Invalid size for DmxPersonalityDescriptionGetResponse struct, is it packed?");
+
 // The CommsStatusGetResponse structure (length = 6) has to be responsed for
 // E120_COMMS_STATUS.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=21
 struct CommsStatusGetResponse
@@ -271,7 +292,7 @@ void TeensyDmx::setChannels(
 
 void TeensyDmx::nextTx()
 {
-    Serial.println("nextTx");
+    // Serial.println("nextTx");
     if (m_state == State::BREAK) {
         m_state = DMX_TX;
         // Send the NSC
@@ -933,6 +954,13 @@ void TeensyDmx::sendRDMDiscUniqueBranch(byte *lower_uid, byte *upper_uid) {
 }
 
 
+void TeensyDmx::sendRDMGetDeviceInfo(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_DEVICE_INFO);
+}
+
+
 void TeensyDmx::sendRDMGetManufacturerLabel(byte *uid) {
     m_rdmBuffer.dataLength = 0;
 
@@ -966,13 +994,46 @@ void TeensyDmx::sendRDMSetIdentifyDevice(byte *uid, bool identify_device) {
 }
 
 
+void TeensyDmx::sendRDMGetDmxStartAddress(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_DMX_START_ADDRESS);
+}
+
+
 void TeensyDmx::sendRDMSetDmxStartAddress(byte *uid, uint16_t dmx_address) {
-    // TODO: Sanity check the value being set
-    if (dmx_address <= DMX_BUFFER_SIZE) {
+    if ((dmx_address > 0) && (dmx_address <= DMX_BUFFER_SIZE)) {
         putUInt16(&m_rdmBuffer.data[0], dmx_address);
         m_rdmBuffer.dataLength = 2;
 
-        buildSendRDMMessage(uid, E120_SET_COMMAND, E120_IDENTIFY_DEVICE);
+        buildSendRDMMessage(uid, E120_SET_COMMAND, E120_DMX_START_ADDRESS);
+    }
+}
+
+
+void TeensyDmx::sendRDMGetDmxPersonality(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_DMX_PERSONALITY);
+}
+
+
+void TeensyDmx::sendRDMSetDmxPersonality(byte *uid, uint8_t personality) {
+    if (personality > 1) {
+        m_rdmBuffer.data[0] = personality;
+        m_rdmBuffer.dataLength = 1;
+
+        buildSendRDMMessage(uid, E120_SET_COMMAND, E120_DMX_PERSONALITY);
+    }
+}
+
+
+void TeensyDmx::sendRDMGetDmxPersonalityDescription(byte *uid, uint8_t personality) {
+    if (personality > 1) {
+        m_rdmBuffer.data[0] = personality;
+        m_rdmBuffer.dataLength = 1;
+
+        buildSendRDMMessage(uid, E120_GET_COMMAND, E120_DMX_PERSONALITY_DESCRIPTION);
     }
 }
 

@@ -146,8 +146,13 @@ class TeensyDmx
     void sendRDMDiscMute(byte *uid);
     void sendRDMDiscUnMute(byte *uid);
     void sendRDMDiscUniqueBranch(byte *lower_uid, byte *upper_uid);
+    void sendRDMGetDeviceInfo(byte *uid);
     void sendRDMSetIdentifyDevice(byte *uid, bool identify_device);
+    void sendRDMGetDmxStartAddress(byte *uid);
     void sendRDMSetDmxStartAddress(byte *uid, uint16_t dmx_address);
+    void sendRDMGetDmxPersonality(byte *uid);
+    void sendRDMSetDmxPersonality(byte *uid, uint8_t personality);
+    void sendRDMGetDmxPersonalityDescription(byte *uid, uint8_t personality);
     void sendRDMGetManufacturerLabel(byte *uid);
     void sendRDMGetDeviceLabel(byte *uid);
     void sendRDMGetDeviceModelDescription(byte *uid);
