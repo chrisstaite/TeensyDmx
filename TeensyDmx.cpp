@@ -163,7 +163,7 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
 const volatile uint8_t* TeensyDmx::getBuffer() const
 {
     if (m_mode == DMX_IN) {
-        // DMX Rx is double buffered due to the interupt handler
+        // DMX Rx is double buffered due to the interrupt handler
         return m_inactiveBuffer;
     } else {
         return m_activeBuffer;
