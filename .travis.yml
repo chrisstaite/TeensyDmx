@@ -10,6 +10,7 @@ group: edge
 cache:
   directories:
     - "~/.platformio"
+    - $HOME/.cache/pip # pip cache
 
 env:
   global:
