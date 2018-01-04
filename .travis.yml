@@ -2,6 +2,8 @@ language: python
 python:
   - "2.7"
 
+os: linux
+dist: trusty
 # Short duration job, use the container/without sudo image as it boots faster
 sudo: false
 # Use the latest Travis images since they are more up to date than the stable release.
@@ -40,8 +42,36 @@ matrix:
     - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXSend
     - env: BOARD=teensy36 PLATFORMIO_CI_SRC=examples/TeensyDMXRecv
 
+    - os: linux
+      dist: trusty
+      # Short duration job, would use the container/without sudo image as it boots faster, but we need a backported lintian, so don't
+      sudo: required
+      env: TASK='spellintian'
+      addons:
+        apt:
+          packages:
+           - moreutils
+    - os: linux
+      dist: trusty
+      # Short duration job, would use the container/without sudo image as it boots faster, but we need a backported lintian, so don't
+      sudo: required
+      env: TASK='spellintian-duplicates'
+      addons:
+        apt:
+          packages:
+           - moreutils
+    - os: linux
+      dist: trusty
+      env: TASK='codespell'
+      addons:
+        apt:
+          packages:
+           - moreutils
+
+
 install:
-  - pip install -U platformio
+  - if [ -z "$TASK" ]; then pip install -U platformio; fi
+  - if [ "$TASK" = "codespell" ]; then pip install --user codespell; fi
 
 script:
-  - platformio ci --lib="." --board=$BOARD
+  - bash -ex .travis-ci.sh
