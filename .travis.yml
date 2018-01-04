@@ -71,6 +71,11 @@ matrix:
           packages:
            - moreutils
 
+  allow_failures:
+    - os: linux
+      dist: trusty
+      env: TASK='spellintian-duplicates'
+
 before_install:
  - if [ "$TASK" == "spellintian" -o "$TASK" == "spellintian-duplicates" ]; then sudo add-apt-repository ppa:waja/trusty-backports -y; sudo apt-get update -qq; sudo apt-get install lintian -y; fi # Install a late enough lintian
 
