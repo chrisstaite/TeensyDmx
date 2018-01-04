@@ -1,5 +1,5 @@
 /* TeensyDmx - DMX Sender/Receiver with RDM for Teensy 3.2
-   Copyright (c) 2017 Peter Newman, Dan Large, http://daniellarge.co.uk
+   Copyright (c) 2017-2018 Peter Newman, Dan Large, http://daniellarge.co.uk
    Copyright (c) 2017 Chris Staite
    Copyright (c) 2014 Jim Paris
    Copyright (c) 2014 Ward
