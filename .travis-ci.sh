@@ -73,7 +73,7 @@ elif [[ $TASK = 'codespell' ]]; then
   spellingerrors=$(zrun codespell --check-filenames --quiet 2 $spellingfiles 2>&1 | wc -l)
   if [[ $spellingerrors -ne 0 ]]; then
     # print the output for info
-    zrun codespell --check-filenames --quiet 2 --regex "[\\dA-Za-z\\-']+" $spellingfiles
+    zrun codespell --check-filenames --quiet 2 --regex "[\\-'\\w--_]+" $spellingfiles
     echo "Found $spellingerrors spelling errors via codespell"
     exit 1;
   else
