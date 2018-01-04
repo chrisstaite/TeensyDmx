@@ -9,6 +9,9 @@ sudo: false
 # Use the latest Travis images since they are more up to date than the stable release.
 group: edge
 
+before_cache:
+  - rm -f $HOME/.cache/pip/log/debug.log # erase lo
+
 cache:
   directories:
     - "~/.platformio"
@@ -68,10 +71,12 @@ matrix:
           packages:
            - moreutils
 
+before_install:
+ - if [ "$TASK" == "spellintian" -o "$TASK" == "spellintian-duplicates" ]; then sudo add-apt-repository ppa:waja/trusty-backports -y; sudo apt-get update -qq; sudo apt-get install lintian -y; fi # Install a late enough lintian
 
 install:
-  - if [ -z "$TASK" ]; then pip install -U platformio; fi
-  - if [ "$TASK" = "codespell" ]; then pip install --user codespell; fi
+  - if [ -z "$TASK" ]; then pip install --upgrade platformio; fi
+  - if [ "$TASK" = "codespell" ]; then pip install codespell; fi
 
 script:
   - bash -ex .travis-ci.sh
