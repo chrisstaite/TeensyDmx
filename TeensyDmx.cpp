@@ -11,7 +11,7 @@ constexpr uint32_t DMXSPEED = 250000;
 constexpr uint32_t DMXFORMAT = SERIAL_8N2;
 constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
 
-// The DeviceInfoGetResponse structure (length = 19) has to be responsed for
+// The DeviceInfoGetResponse structure (length = 19) has to be responded for
 // E120_DEVICE_INFO.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=96
 struct DeviceInfoGetResponse
 {
@@ -30,7 +30,7 @@ struct DeviceInfoGetResponse
 static_assert((sizeof(DeviceInfoGetResponse) == 19),
               "Invalid size for DeviceInfoGetResponse struct, is it packed?");
 
-// The CommsStatusGetResponse structure (length = 6) has to be responsed for
+// The CommsStatusGetResponse structure (length = 6) has to be responded for
 // E120_COMMS_STATUS.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=21
 struct CommsStatusGetResponse
 {
@@ -163,7 +163,7 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
 const volatile uint8_t* TeensyDmx::getBuffer() const
 {
     if (m_mode == DMX_IN) {
-        // DMX Rx is double buffered due to the interupt handler
+        // DMX Rx is double buffered due to the interrupt handler
         return m_inactiveBuffer;
     } else {
         return m_activeBuffer;
@@ -636,7 +636,7 @@ uint16_t TeensyDmx::rdmGetCommsStatus()
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     }
     // return all comms status data
-    // The data has to be responsed in the Data buffer.
+    // The data to be responded has to be in the Data buffer.
     CommsStatusGetResponse *commsStatus =
         reinterpret_cast<CommsStatusGetResponse*>(m_rdmBuffer.data);
 
@@ -672,7 +672,7 @@ uint16_t TeensyDmx::rdmGetDeviceInfo()
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
         // return all device info data
-        // The data has to be responsed in the Data buffer.
+        // The data to be responded has to be in the Data buffer.
         DeviceInfoGetResponse *devInfo =
             reinterpret_cast<DeviceInfoGetResponse*>(m_rdmBuffer.data);
 
