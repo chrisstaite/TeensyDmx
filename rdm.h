@@ -371,7 +371,7 @@
 #define E120_PRODUCT_DETAIL_WIRELESS_LINK                 0x0604 /* radio/infrared                                              */
 
 /* Generally applied to Data Conversion and Interfaces                                                                          */
-#define E120_PRODUCT_DETAIL_PROTOCOL_CONVERTOR            0x0701 /* D54/AMX192/Non DMX serial links, etc to/from DMX512         */
+#define E120_PRODUCT_DETAIL_PROTOCOL_CONVERTER            0x0701 /* D54/AMX192/Non DMX serial links, etc to/from DMX512         */
 #define E120_PRODUCT_DETAIL_ANALOG_DEMULTIPLEX            0x0702 /* DMX to DC voltage                                           */
 #define E120_PRODUCT_DETAIL_ANALOG_MULTIPLEX              0x0703 /* DC Voltage to DMX                                           */
 #define E120_PRODUCT_DETAIL_SWITCH_PANEL                  0x0704 /* Pushbuttons to DMX or polled using RDM                      */
