@@ -175,6 +175,10 @@ class TeensyDmx
     void sendRDMGetPerformSelftest(byte *uid);
     void sendRDMSetPerformSelftest(byte *uid, uint8_t test_number);
     void sendRDMGetSelfTestDescription(byte *uid, uint8_t test_number);
+    void sendRDMGetSensorDefinition(byte *uid, uint8_t sensor_number);
+    void sendRDMGetSensorValue(byte *uid, uint8_t sensor_number);
+    void sendRDMSetSensorValue(byte *uid, uint8_t sensor_number);
+    void sendRDMSetRecordSensors(byte *uid, uint8_t sensor_number);
 
   private:
     TeensyDmx(const TeensyDmx&);

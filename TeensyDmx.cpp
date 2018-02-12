@@ -51,15 +51,48 @@ struct DmxPersonalityDescriptionGetResponse
 static_assert((sizeof(DmxPersonalityDescriptionGetResponse) == 35),
               "Invalid size for DmxPersonalityDescriptionGetResponse struct, is it packed?");
 
-// The SelfTestDescriptionGetResponse structure (length = 3 to 35) has to be responded for
+// The SelfTestDescriptionGetResponse structure (length = 1 to 33) has to be responded for
 // E120_SELF_TEST_DESCRIPTION.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=4129
 struct SelfTestDescriptionGetResponse
 {
-  byte test_number;
+  byte testNumber;
   char description[RDM_MAX_STRING_LENGTH];
 } __attribute__((__packed__));  // struct SelfTestDescriptionGetResponse
 static_assert((sizeof(SelfTestDescriptionGetResponse) == 33),
               "Invalid size for SelfTestDescriptionGetResponse struct, is it packed?");
+
+// The SensorDefinitionGetResponse structure (length = 13 to 45) has to be responded for
+// E120_SENSOR_DEFINITION.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=512
+struct SensorDefinitionGetResponse
+{
+  byte sensorNumber;
+  byte type;
+  byte unit;
+  byte prefix;
+  int16_t rangeMin;
+  int16_t rangeMax;
+  int16_t normalMin;
+  int16_t normalMax;
+  byte supportsRecording;
+  char name[RDM_MAX_STRING_LENGTH];
+} __attribute__((__packed__));  // struct SensorDefinitionGetResponse
+static_assert((sizeof(SensorDefinitionGetResponse) == 45),
+              "Invalid size for SensorDefinitionGetResponse struct, is it packed?");
+
+// The SensorValueGetResponse structure (length = 9) has to be responded for
+// E120_SENSOR_VALUE.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=513
+struct SensorValueGetResponse
+{
+  byte sensorNumber;
+  int16_t presentValue;
+  int16_t lowest;
+  int16_t highest;
+  int16_t recorded;
+} __attribute__((__packed__));  // struct SensorValueGetResponse
+static_assert((sizeof(SensorValueGetResponse) == 9),
+              "Invalid size for SensorValueGetResponse struct, is it packed?");
+
+// SensorValueSetResponse is identical to SensorValueGetResponse
 
 // The CommsStatusGetResponse structure (length = 6) has to be responded for
 // E120_COMMS_STATUS.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=21
@@ -1209,6 +1242,42 @@ void TeensyDmx::sendRDMGetSelfTestDescription(byte *uid, uint8_t test_number) {
     m_rdmBuffer.dataLength = 1;
 
     buildSendRDMMessage(uid, E120_GET_COMMAND, E120_SELF_TEST_DESCRIPTION);
+}
+
+
+void TeensyDmx::sendRDMGetSensorDefinition(byte *uid, uint8_t sensor_number) {
+    if (sensor_number < 0xff) {
+        m_rdmBuffer.data[0] = sensor_number;
+        m_rdmBuffer.dataLength = 1;
+
+        buildSendRDMMessage(uid, E120_GET_COMMAND, E120_SENSOR_DEFINITION);
+    }
+}
+
+
+void TeensyDmx::sendRDMGetSensorValue(byte *uid, uint8_t sensor_number) {
+    if (sensor_number < 0xff) {
+        m_rdmBuffer.data[0] = sensor_number;
+        m_rdmBuffer.dataLength = 1;
+
+        buildSendRDMMessage(uid, E120_GET_COMMAND, E120_SENSOR_VALUE);
+    }
+}
+
+
+void TeensyDmx::sendRDMSetSensorValue(byte *uid, uint8_t sensor_number) {
+    m_rdmBuffer.data[0] = sensor_number;
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_SENSOR_VALUE);
+}
+
+
+void TeensyDmx::sendRDMSetRecordSensors(byte *uid, uint8_t sensor_number) {
+    m_rdmBuffer.data[0] = sensor_number;
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_RECORD_SENSORS);
 }
 
 
