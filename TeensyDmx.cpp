@@ -93,6 +93,9 @@ static_assert((sizeof(SensorValueGetResponse) == 9),
               "Invalid size for SensorValueGetResponse struct, is it packed?");
 
 // SensorValueSetResponse is identical to SensorValueGetResponse
+using SensorValueSetResponse = SensorValueGetResponse;
+static_assert((sizeof(SensorValueSetResponse) == 9),
+              "Invalid size for SensorValueSetResponse struct, is it packed?");
 
 // The CommsStatusGetResponse structure (length = 6) has to be responded for
 // E120_COMMS_STATUS.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=21

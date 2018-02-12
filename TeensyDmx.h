@@ -58,9 +58,9 @@ struct RdmData
 static_assert((sizeof(RdmData) == 255),
               "Invalid size for RdmData struct, is it packed?");
 
-typedef void (*rdmControllerCallback)(CallbackStatus, RdmData*);
+using rdmControllerCallback = void(*)(CallbackStatus, RdmData*);
 
-typedef void (*rdmDiscoveryCallback)(CallbackStatus, byte*, uint32_t);
+using rdmDiscoveryCallback = void(*)(CallbackStatus, byte*, uint32_t);
 
 struct RdmInit
 {
