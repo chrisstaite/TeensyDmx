@@ -51,6 +51,16 @@ struct DmxPersonalityDescriptionGetResponse
 static_assert((sizeof(DmxPersonalityDescriptionGetResponse) == 35),
               "Invalid size for DmxPersonalityDescriptionGetResponse struct, is it packed?");
 
+// The SelfTestDescriptionGetResponse structure (length = 3 to 35) has to be responsed for
+// E120_SELF_TEST_DESCRIPTION.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=4129
+struct SelfTestDescriptionGetResponse
+{
+  byte test_number;
+  char description[RDM_MAX_STRING_LENGTH];
+} __attribute__((__packed__));  // struct SelfTestDescriptionGetResponse
+static_assert((sizeof(SelfTestDescriptionGetResponse) == 33),
+              "Invalid size for SelfTestDescriptionGetResponse struct, is it packed?");
+
 // The CommsStatusGetResponse structure (length = 6) has to be responsed for
 // E120_COMMS_STATUS.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=21
 struct CommsStatusGetResponse
@@ -982,8 +992,15 @@ void TeensyDmx::sendRDMGetDeviceModelDescription(byte *uid) {
 }
 
 
-void TeensyDmx::sendRDMSetIdentifyDevice(byte *uid, bool identify_device) {
-    if (identify_device) {
+void TeensyDmx::sendRDMGetIdentifyDevice(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_IDENTIFY_DEVICE);
+}
+
+
+void TeensyDmx::sendRDMSetIdentifyDevice(byte *uid, bool identify_state) {
+    if (identify_state) {
         m_rdmBuffer.data[0] = 1;
     } else {
         m_rdmBuffer.data[0] = 0;
@@ -1035,6 +1052,163 @@ void TeensyDmx::sendRDMGetDmxPersonalityDescription(byte *uid, uint8_t personali
 
         buildSendRDMMessage(uid, E120_GET_COMMAND, E120_DMX_PERSONALITY_DESCRIPTION);
     }
+}
+
+
+void TeensyDmx::sendRDMSetResetDevice(byte *uid, uint8_t reset_mode) {
+    m_rdmBuffer.data[0] = reset_mode;
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_RESET_DEVICE);
+}
+
+
+void TeensyDmx::sendRDMGetPanInvert(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_PAN_INVERT);
+}
+
+
+void TeensyDmx::sendRDMSetPanInvert(byte *uid, bool invert) {
+    if (invert) {
+        m_rdmBuffer.data[0] = 1;
+    } else {
+        m_rdmBuffer.data[0] = 0;
+    }
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_PAN_INVERT);
+}
+
+
+void TeensyDmx::sendRDMGetTiltInvert(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_TILT_INVERT);
+}
+
+
+void TeensyDmx::sendRDMSetTiltInvert(byte *uid, bool invert) {
+    if (invert) {
+        m_rdmBuffer.data[0] = 1;
+    } else {
+        m_rdmBuffer.data[0] = 0;
+    }
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_TILT_INVERT);
+}
+
+
+void TeensyDmx::sendRDMGetPanTiltSwap(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_PAN_TILT_SWAP);
+}
+
+
+void TeensyDmx::sendRDMSetPanTiltSwap(byte *uid, bool swap) {
+    if (invert) {
+        m_rdmBuffer.data[0] = 1;
+    } else {
+        m_rdmBuffer.data[0] = 0;
+    }
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_PAN_TILT_SWAP);
+}
+
+
+void TeensyDmx::sendRDMGetFactoryDefaults(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_FACTORY_DEFAULTS);
+}
+
+
+void TeensyDmx::sendRDMSetFactoryDefaults(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_FACTORY_DEFAULTS);
+}
+
+
+void TeensyDmx::sendRDMGetLampState(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_LAMP_STATE);
+}
+
+
+void TeensyDmx::sendRDMSetLampState(byte *uid, uint8_t lamp_state) {
+    if ((lamp_state >= 0) && (lamp_state <= 3) ||
+        (lamp_state >= 128) && (lamp_state <= 223)) {
+        m_rdmBuffer.data[0] = lamp_state;
+        m_rdmBuffer.dataLength = 1;
+
+        buildSendRDMMessage(uid, E120_SET_COMMAND, E120_LAMP_STATE);
+    }
+}
+
+
+void TeensyDmx::sendRDMGetLampOnMode(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_LAMP_ON_MODE);
+}
+
+
+void TeensyDmx::sendRDMSetLampOnMode(byte *uid, uint8_t mode) {
+    if ((mode >= 0) && (mode <= 3) ||
+        (mode >= 128) && (mode <= 223)) {
+        m_rdmBuffer.data[0] = mode;
+        m_rdmBuffer.dataLength = 1;
+
+        buildSendRDMMessage(uid, E120_SET_COMMAND, E120_LAMP_ON_MODE);
+    }
+}
+
+
+void TeensyDmx::sendRDMGetPowerOnSelfTest(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_POWER_ON_SELF_TEST);
+}
+
+
+void TeensyDmx::sendRDMSetPowerOnSelfTest(byte *uid, bool power_on_self_test) {
+    if (power_on_self_test) {
+        m_rdmBuffer.data[0] = 1;
+    } else {
+        m_rdmBuffer.data[0] = 0;
+    }
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_POWER_ON_SELF_TEST);
+}
+
+
+void TeensyDmx::sendRDMGetPerformSelftest(byte *uid) {
+    m_rdmBuffer.dataLength = 0;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_PERFORM_SELFTEST);
+}
+
+
+void TeensyDmx::sendRDMSetPerformSelftest(byte *uid, uint8_t test_number) {
+    m_rdmBuffer.data[0] = test_number;
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_PERFORM_SELFTEST);
+}
+
+
+void TeensyDmx::sendRDMGetSelfTestDescription(byte *uid, uint8_t test_number) {
+    m_rdmBuffer.data[0] = test_number;
+    m_rdmBuffer.dataLength = 1;
+
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_SELF_TEST_DESCRIPTION);
 }
 
 

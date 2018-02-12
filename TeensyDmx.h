@@ -147,7 +147,8 @@ class TeensyDmx
     void sendRDMDiscUnMute(byte *uid);
     void sendRDMDiscUniqueBranch(byte *lower_uid, byte *upper_uid);
     void sendRDMGetDeviceInfo(byte *uid);
-    void sendRDMSetIdentifyDevice(byte *uid, bool identify_device);
+    void sendRDMGetIdentifyDevice(byte *uid);
+    void sendRDMSetIdentifyDevice(byte *uid, bool identify_state);
     void sendRDMGetDmxStartAddress(byte *uid);
     void sendRDMSetDmxStartAddress(byte *uid, uint16_t dmx_address);
     void sendRDMGetDmxPersonality(byte *uid);
@@ -156,6 +157,24 @@ class TeensyDmx
     void sendRDMGetManufacturerLabel(byte *uid);
     void sendRDMGetDeviceLabel(byte *uid);
     void sendRDMGetDeviceModelDescription(byte *uid);
+    void sendRDMSetResetDevice(byte *uid, uint8_t reset_mode);
+    void sendRDMGetPanInvert(byte *uid);
+    void sendRDMSetPanInvert(byte *uid, bool invert);
+    void sendRDMGetTiltInvert(byte *uid);
+    void sendRDMSetTiltInvert(byte *uid, bool invert);
+    void sendRDMGetPanTiltSwap(byte *uid);
+    void sendRDMSetPanTiltSwap(byte *uid, bool swap);
+    void sendRDMGetFactoryDefaults(byte *uid);
+    void sendRDMSetFactoryDefaults(byte *uid);
+    void sendRDMGetLampState(byte *uid);
+    void sendRDMSetLampState(byte *uid, uint8_t lamp_state);
+    void sendRDMGetLampOnMode(byte *uid);
+    void sendRDMSetLampOnMode(byte *uid, uint8_t mode);
+    void sendRDMGetPowerOnSelfTest(byte *uid);
+    void sendRDMSetPowerOnSelfTest(byte *uid, bool power_on_self_test);
+    void sendRDMGetPerformSelftest(byte *uid);
+    void sendRDMSetPerformSelftest(byte *uid, uint8_t test_number);
+    void sendRDMGetSelfTestDescription(byte *uid, uint8_t test_number);
 
   private:
     TeensyDmx(const TeensyDmx&);
