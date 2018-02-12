@@ -11,7 +11,7 @@ constexpr uint32_t DMXSPEED = 250000;
 constexpr uint32_t DMXFORMAT = SERIAL_8N2;
 constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
 
-// The DeviceInfoGetResponse structure (length = 19) has to be responsed for
+// The DeviceInfoGetResponse structure (length = 19) has to be responded for
 // E120_DEVICE_INFO.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=96
 struct DeviceInfoGetResponse
 {
@@ -188,7 +188,7 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
 const volatile uint8_t* TeensyDmx::getBuffer() const
 {
     if (m_mode == DMX_IN) {
-        // DMX Rx is double buffered due to the interupt handler
+        // DMX Rx is double buffered due to the interrupt handler
         return m_inactiveBuffer;
     } else {
         return m_activeBuffer;
@@ -665,7 +665,7 @@ uint16_t TeensyDmx::rdmGetCommsStatus()
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     }
     // return all comms status data
-    // The data has to be responsed in the Data buffer.
+    // The data to be responded has to be in the Data buffer.
     CommsStatusGetResponse *commsStatus =
         reinterpret_cast<CommsStatusGetResponse*>(m_rdmBuffer.data);
 
@@ -701,7 +701,7 @@ uint16_t TeensyDmx::rdmGetDeviceInfo()
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
         // return all device info data
-        // The data has to be responsed in the Data buffer.
+        // The data to be responded has to be in the Data buffer.
         DeviceInfoGetResponse *devInfo =
             reinterpret_cast<DeviceInfoGetResponse*>(m_rdmBuffer.data);
 
@@ -1395,16 +1395,13 @@ void UART0RxStatus()
 		}
 	}
 #else
-	if (s & UART_S1_RDRF) {
-        uartInstances[0]->handleByte(UART0_D);
-    }
-#endif
-#ifndef IRQ_UART0_ERROR
-    if (s & UART_S1_FE)
-    {
+    if (s & UART_S1_FE) {
         (void) UART0_D;
         UART0_CFIFO = UART_CFIFO_RXFLUSH;  //PN Fix?!?
         uartInstances[0]->completeFrame();
+    }
+    else if (s & UART_S1_RDRF) {
+        uartInstances[0]->handleByte(UART0_D);
     }
 #endif
     uart0_status_isr();
@@ -1433,15 +1430,11 @@ void UART1RxStatus()
 		}
 	}
 #else
-	if (s & UART_S1_RDRF) {
-        uartInstances[1]->handleByte(UART1_D);
-    }
-#endif
-#ifndef IRQ_UART1_ERROR
-    if (s & UART_S1_FE)
-    {
+    if (s & UART_S1_FE) {
         (void) UART1_D;
         uartInstances[1]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[1]->handleByte(UART1_D);
     }
 #endif
     uart1_status_isr();
@@ -1470,15 +1463,11 @@ void UART2RxStatus()
 		}
 	}
 #else
-	if (s & UART_S1_RDRF) {
-        uartInstances[2]->handleByte(UART2_D);
-    }
-#endif
-#ifndef IRQ_UART2_ERROR
-    if (s & UART_S1_FE)
-    {
+    if (s & UART_S1_FE) {
         (void) UART2_D;
         uartInstances[2]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[2]->handleByte(UART2_D);
     }
 #endif
     uart2_status_isr();
@@ -1508,15 +1497,11 @@ void UART3RxStatus()
 		}
 	}
 #else
-	if (s & UART_S1_RDRF) {
-        uartInstances[3]->handleByte(UART3_D);
-    }
-#endif
-#ifndef IRQ_UART3_ERROR
-    if (s & UART_S1_FE)
-    {
+    if (s & UART_S1_FE) {
         (void) UART3_D;
         uartInstances[3]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[3]->handleByte(UART3_D);
     }
 #endif
     uart3_status_isr();
@@ -1547,15 +1532,11 @@ void UART4RxStatus()
 		}
 	}
 #else
-	if (s & UART_S1_RDRF) {
-        uartInstances[4]->handleByte(UART4_D);
-    }
-#endif
-#ifndef IRQ_UART4_ERROR
-    if (s & UART_S1_FE)
-    {
+    if (s & UART_S1_FE) {
         (void) UART4_D;
         uartInstances[4]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[4]->handleByte(UART4_D);
     }
 #endif
     uart4_status_isr();
@@ -1586,15 +1567,11 @@ void UART5RxStatus()
         }
     }
 #else
-    if (s & UART_S1_RDRF) {
-        uartInstances[5]->handleByte(UART5_D);
-    }
-#endif
-#ifndef IRQ_UART5_ERROR
-    if (s & UART_S1_FE)
-    {
+    if (s & UART_S1_FE) {
         (void) UART5_D;
         uartInstances[5]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[5]->handleByte(UART5_D);
     }
 #endif
     uart5_status_isr();
@@ -1629,7 +1606,7 @@ void TeensyDmx::startReceive()
 
         attachInterruptVector(IRQ_UART0_STATUS, UART0RxStatus);
 
-#ifdef IRQ_UART0_ERROR
+#ifdef HAS_KINETISK_UART0_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1657,7 +1634,7 @@ void TeensyDmx::startReceive()
 
         attachInterruptVector(IRQ_UART1_STATUS, UART1RxStatus);
 
-#ifdef IRQ_UART1_ERROR
+#ifdef HAS_KINETISK_UART1_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1685,7 +1662,7 @@ void TeensyDmx::startReceive()
 
         attachInterruptVector(IRQ_UART2_STATUS, UART2RxStatus);
 
-#ifdef IRQ_UART2_ERROR
+#ifdef HAS_KINETISK_UART2_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1712,7 +1689,7 @@ void TeensyDmx::startReceive()
 
         attachInterruptVector(IRQ_UART3_STATUS, UART3RxStatus);
 
-#ifdef IRQ_UART3_ERROR
+#ifdef HAS_KINETISK_UART3_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1741,7 +1718,7 @@ void TeensyDmx::startReceive()
 
         attachInterruptVector(IRQ_UART4_STATUS, UART4RxStatus);
 
-#ifdef IRQ_UART4_ERROR
+#ifdef HAS_KINETISK_UART4_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1770,7 +1747,7 @@ void TeensyDmx::startReceive()
 
         attachInterruptVector(IRQ_UART5_STATUS, UART5RxStatus);
 
-#ifdef IRQ_UART5_ERROR
+#ifdef HAS_KINETISK_UART5_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1798,87 +1775,75 @@ void TeensyDmx::stopReceive()
         UART0_RWFIFO = 0;
 #endif
 #ifdef HAS_KINETISK_UART0_FIFO
+        NVIC_DISABLE_IRQ(IRQ_UART0_ERROR);
+        attachInterruptVector(IRQ_UART0_ERROR, uart0_error_isr);
         UART0_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
 #else
         UART0_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
 #endif
         attachInterruptVector(IRQ_UART0_STATUS, uart0_status_isr);
-#ifdef IRQ_UART0_ERROR
-        NVIC_DISABLE_IRQ(IRQ_UART0_ERROR);
-        attachInterruptVector(IRQ_UART0_ERROR, uart0_error_isr);
-#endif
     } else if (&m_uart == &Serial2) {
 #ifdef HAS_KINETISK_UART1_FIFO
         UART1_RWFIFO = 0;
 #endif
 #ifdef HAS_KINETISK_UART1_FIFO
+        NVIC_DISABLE_IRQ(IRQ_UART1_ERROR);
+        attachInterruptVector(IRQ_UART1_ERROR, uart1_error_isr);
         UART1_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
 #else
         UART1_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
 #endif
         attachInterruptVector(IRQ_UART1_STATUS, uart1_status_isr);
-#ifdef IRQ_UART1_ERROR
-        NVIC_DISABLE_IRQ(IRQ_UART1_ERROR);
-        attachInterruptVector(IRQ_UART1_ERROR, uart1_error_isr);
-#endif
     } else if (&m_uart == &Serial3) {
 #ifdef HAS_KINETISK_UART2_FIFO
         UART2_RWFIFO = 0;
 #endif
 #ifdef HAS_KINETISK_UART2_FIFO
+        NVIC_DISABLE_IRQ(IRQ_UART2_ERROR);
+        attachInterruptVector(IRQ_UART2_ERROR, uart2_error_isr);
         UART2_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
 #else
         UART2_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
 #endif
         attachInterruptVector(IRQ_UART2_STATUS, uart2_status_isr);
-#ifdef IRQ_UART2_ERROR
-        NVIC_DISABLE_IRQ(IRQ_UART2_ERROR);
-        attachInterruptVector(IRQ_UART2_ERROR, uart2_error_isr);
-#endif
     }
 #ifdef HAS_KINETISK_UART3
     else if (&m_uart == &Serial4) {
         UART3_RWFIFO = 0;
 #ifdef HAS_KINETISK_UART3_FIFO
+        NVIC_DISABLE_IRQ(IRQ_UART3_ERROR);
+        attachInterruptVector(IRQ_UART3_ERROR, uart3_error_isr);
         UART3_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
 #else
         UART3_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
 #endif
         attachInterruptVector(IRQ_UART3_STATUS, uart3_status_isr);
-#ifdef IRQ_UART3_ERROR
-        NVIC_DISABLE_IRQ(IRQ_UART3_ERROR);
-        attachInterruptVector(IRQ_UART3_ERROR, uart3_error_isr);
-#endif
     }
 #endif
 #ifdef HAS_KINETISK_UART4
     else if (&m_uart == &Serial5) {
         UART4_RWFIFO = 0;
 #ifdef HAS_KINETISK_UART4_FIFO
+        NVIC_DISABLE_IRQ(IRQ_UART4_ERROR);
+        attachInterruptVector(IRQ_UART4_ERROR, uart4_error_isr);
         UART4_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
 #else
         UART4_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
 #endif
         attachInterruptVector(IRQ_UART4_STATUS, uart4_status_isr);
-#ifdef IRQ_UART4_ERROR
-        NVIC_DISABLE_IRQ(IRQ_UART4_ERROR);
-        attachInterruptVector(IRQ_UART4_ERROR, uart4_error_isr);
-#endif
     }
 #endif
 #ifdef HAS_KINETISK_UART5
     else if (&m_uart == &Serial6) {
         UART5_RWFIFO = 0;
 #ifdef HAS_KINETISK_UART5_FIFO
+        NVIC_DISABLE_IRQ(IRQ_UART5_ERROR);
+        attachInterruptVector(IRQ_UART5_ERROR, uart5_error_isr);
         UART5_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
 #else
         UART5_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
 #endif
         attachInterruptVector(IRQ_UART5_STATUS, uart5_status_isr);
-#ifdef IRQ_UART5_ERROR
-        NVIC_DISABLE_IRQ(IRQ_UART5_ERROR);
-        attachInterruptVector(IRQ_UART5_ERROR, uart5_error_isr);
-#endif
     }
 #endif
 }

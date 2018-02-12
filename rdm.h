@@ -289,14 +289,14 @@
 /* Table A-6: Product Detail Defines                    */
 /********************************************************/
 
-#define E120_PRODUCT_DETAIL_NOT DECLARED                  0x0000
+#define E120_PRODUCT_DETAIL_NOT_DECLARED                  0x0000
 
 /* Generally applied to fixtures                                                                                                */
 #define E120_PRODUCT_DETAIL_ARC                           0x0001
 #define E120_PRODUCT_DETAIL_METAL_HALIDE                  0x0002
 #define E120_PRODUCT_DETAIL_INCANDESCENT                  0x0003
 #define E120_PRODUCT_DETAIL_LED                           0x0004
-#define E120_PRODUCT_DETAIL_FLUROESCENT                   0x0005
+#define E120_PRODUCT_DETAIL_FLUORESCENT                   0x0005
 #define E120_PRODUCT_DETAIL_COLDCATHODE                   0x0006  /*includes Neon/Argon                                         */
 #define E120_PRODUCT_DETAIL_ELECTROLUMINESCENT            0x0007
 #define E120_PRODUCT_DETAIL_LASER                         0x0008
@@ -324,7 +324,7 @@
 #define E120_PRODUCT_DETAIL_FOGGER_GLYCOL                 0x0300 /* Glycol/Glycerin hazer                                       */
 #define E120_PRODUCT_DETAIL_FOGGER_MINERALOIL             0x0301 /* White Mineral oil hazer                                     */
 #define E120_PRODUCT_DETAIL_FOGGER_WATER                  0x0302 /* Water hazer                                                 */
-#define E120_PRODUCT_DETAIL_C02                           0x0303 /* Dry Ice/Carbon Dioxide based                                */
+#define E120_PRODUCT_DETAIL_CO2                           0x0303 /* Dry Ice/Carbon Dioxide based                                */
 #define E120_PRODUCT_DETAIL_LN2                           0x0304 /* Nitrogen based                                              */
 #define E120_PRODUCT_DETAIL_BUBBLE                        0x0305 /* including foam                                              */
 #define E120_PRODUCT_DETAIL_FLAME_PROPANE                 0x0306
@@ -342,7 +342,7 @@
 #define E120_PRODUCT_DETAIL_SINE                          0x0402
 #define E120_PRODUCT_DETAIL_PWM                           0x0403
 #define E120_PRODUCT_DETAIL_DC                            0x0404 /* Variable voltage                                            */
-#define E120_PRODUCT_DETAIL_HFBALLAST                     0x0405 /* for Fluroescent                                             */
+#define E120_PRODUCT_DETAIL_HFBALLAST                     0x0405 /* for Fluorescent                                             */
 #define E120_PRODUCT_DETAIL_HFHV_NEONBALLAST              0x0406 /* for Neon/Argon and other coldcathode.                       */
 #define E120_PRODUCT_DETAIL_HFHV_EL                       0x0407 /* for Electroluminscent                                       */
 #define E120_PRODUCT_DETAIL_MHR_BALLAST                   0x0408 /* for Metal Halide                                            */
@@ -371,7 +371,7 @@
 #define E120_PRODUCT_DETAIL_WIRELESS_LINK                 0x0604 /* radio/infrared                                              */
 
 /* Generally applied to Data Conversion and Interfaces                                                                          */
-#define E120_PRODUCT_DETAIL_PROTOCOL_CONVERTOR            0x0701 /* D54/AMX192/Non DMX serial links, etc to/from DMX512         */
+#define E120_PRODUCT_DETAIL_PROTOCOL_CONVERTER            0x0701 /* D54/AMX192/Non DMX serial links, etc to/from DMX512         */
 #define E120_PRODUCT_DETAIL_ANALOG_DEMULTIPLEX            0x0702 /* DMX to DC voltage                                           */
 #define E120_PRODUCT_DETAIL_ANALOG_MULTIPLEX              0x0703 /* DC Voltage to DMX                                           */
 #define E120_PRODUCT_DETAIL_SWITCH_PANEL                  0x0704 /* Pushbuttons to DMX or polled using RDM                      */
@@ -509,33 +509,33 @@
 
 #define E120_UNITS_NONE                                  0x00   /* CONTACTS                                                     */
 #define E120_UNITS_CENTIGRADE                            0x01   /* TEMPERATURE	                                                */
-#define E120_UNITS_VOLTS_DC                              0x02   /* VOLTAGE		                                                */
+#define E120_UNITS_VOLTS_DC                              0x02   /* VOLTAGE		                                        */
 #define E120_UNITS_VOLTS_AC_PEAK                         0x03   /* VOLTAGE                                                      */
 #define E120_UNITS_VOLTS_AC_RMS                          0x04   /* VOLTAGE                                                      */
-#define E120_UNITS_AMPERE_DC                             0x05   /* CURRENT	                                                    */
-#define E120_UNITS_AMPERE_AC_PEAK                        0x06   /* CURRENT	                                                    */
+#define E120_UNITS_AMPERE_DC                             0x05   /* CURRENT	                                                */
+#define E120_UNITS_AMPERE_AC_PEAK                        0x06   /* CURRENT	                                                */
 #define E120_UNITS_AMPERE_AC_RMS                         0x07   /* CURRENT                                                      */
-#define E120_UNITS_HERTZ                                 0x08   /* FREQUENCY / ANG_VEL                                          */
-#define E120_UNITS_OHM                                   0x09   /* RESISTANCE			                                        */
-#define E120_UNITS_WATT                                  0x0A   /* POWER					                                    */
+#define E120_UNITS_HERTZ                                 0x08   /* FREQUENCY / ANGULAR_VELOCITY                                 */
+#define E120_UNITS_OHM                                   0x09   /* RESISTANCE			                                */
+#define E120_UNITS_WATT                                  0x0A   /* POWER			                                */
 #define E120_UNITS_KILOGRAM                              0x0B   /* MASS                                                         */
-#define E120_UNITS_METERS                                0x0C   /* LENGTH / POSITION		                                    */
-#define E120_UNITS_METERS_SQUARED                        0x0D   /* AREA					                                        */
+#define E120_UNITS_METERS                                0x0C   /* LENGTH / POSITION		                                */
+#define E120_UNITS_METERS_SQUARED                        0x0D   /* AREA				                                */
 #define E120_UNITS_METERS_CUBED                          0x0E   /* VOLUME                                                       */
 #define E120_UNITS_KILOGRAMMES_PER_METER_CUBED           0x0F   /* DENSITY                                                      */
-#define E120_UNITS_METERS_PER_SECOND                     0x10   /* VELOCITY		                                                */
+#define E120_UNITS_METERS_PER_SECOND                     0x10   /* VELOCITY		                                        */
 #define E120_UNITS_METERS_PER_SECOND_SQUARED             0x11   /* ACCELERATION	                                                */
 #define E120_UNITS_NEWTON                                0x12   /* FORCE                                                        */
-#define E120_UNITS_JOULE                                 0x13   /* ENERGY		                                                */
-#define E120_UNITS_PASCAL                                0x14   /* PRESSURE		                                                */
+#define E120_UNITS_JOULE                                 0x13   /* ENERGY		                                        */
+#define E120_UNITS_PASCAL                                0x14   /* PRESSURE		                                        */
 #define E120_UNITS_SECOND                                0x15   /* TIME                                                         */
-#define E120_UNITS_DEGREE                                0x16   /* ANGLE			                                            */
-#define E120_UNITS_STERADIAN                             0x17   /* ANGLE			                                            */
+#define E120_UNITS_DEGREE                                0x16   /* ANGLE			                                */
+#define E120_UNITS_STERADIAN                             0x17   /* ANGLE			                                */
 #define E120_UNITS_CANDELA                               0x18   /* LUMINOUS_INTENSITY                                           */
-#define E120_UNITS_LUMEN                                 0x19   /* LUMINOUS_FLUX		                                        */
-#define E120_UNITS_LUX                                   0x1A   /* ILLUMINANCE		                                            */
+#define E120_UNITS_LUMEN                                 0x19   /* LUMINOUS_FLUX		                                */
+#define E120_UNITS_LUX                                   0x1A   /* ILLUMINANCE		                                        */
 #define E120_UNITS_IRE                                   0x1B   /* CHROMINANCE                                                  */
-#define E120_UNITS_BYTE                                  0x1C   /* MEMORY	                                                    */
+#define E120_UNITS_BYTE                                  0x1C   /* MEMORY	                                                */
 /* Manufacturer-Specific Units                           0x80-
  				                                         0xFF				                                                    */
 
