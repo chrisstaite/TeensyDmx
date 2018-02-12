@@ -201,9 +201,6 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
     m_rdmChecksum(0),
     m_deviceLabel{0}
 {
-    Serial.begin(115200);
-    Serial.println("Started");
-
     if (&m_uart == &Serial1) {
         uartInstances[0] = this;
     } else if (&m_uart == &Serial2) {
@@ -335,7 +332,6 @@ void TeensyDmx::setChannels(
 
 void TeensyDmx::nextTx()
 {
-    // Serial.println("nextTx");
     if (m_state == State::BREAK) {
         m_state = DMX_TX;
         // Send the NSC
@@ -515,8 +511,6 @@ bool TeensyDmx::rdmChanged(void)
 
 void TeensyDmx::completeFrame()
 {
-    Serial.println("Complete frame");
-
     switch (m_state)
     {
         case State::DMX_RECV:
@@ -992,8 +986,6 @@ void TeensyDmx::sendRDMDiscUniqueBranch(byte *lower_uid, byte *upper_uid) {
     buildSendRDMMessage(broadcastUid, E120_DISCOVERY_COMMAND, E120_DISC_UNIQUE_BRANCH);
     m_state = State::RDM_DUB_PREAMBLE;
     m_controllerState = ControllerState::RDM_DUB;
-
-    Serial.println("Sent DUB");
 }
 
 
@@ -1283,7 +1275,6 @@ void TeensyDmx::sendRDMSetRecordSensors(byte *uid, uint8_t sensor_number) {
 
 void TeensyDmx::processRDM()
 {
-    Serial.println("Process RDM");
     if (m_rdm == nullptr) {
         return;
     }
@@ -1426,7 +1417,6 @@ void TeensyDmx::processDiscovery()
 
 void TeensyDmx::respondMessage(uint16_t nackReason)
 {
-    Serial.println("respond Message");
     // swap SrcID into DestID for sending back.
     memcpy(m_rdmBuffer.destId, m_rdmBuffer.sourceId, RDM_UID_LENGTH);
     if (m_rdm != nullptr) {
@@ -1486,16 +1476,6 @@ void TeensyDmx::sendRDMMessage()
 
     uint16_t checkSum = rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
                                              m_rdmBuffer.length);
-
-    Serial.print(millis());
-    Serial.print(" - ");
-    Serial.println("Sending RDM: ");
-    for(int i = 0; i < m_rdmBuffer.length; i++)
-    {
-      Serial.print(reinterpret_cast<uint8_t*>(&m_rdmBuffer)[i], HEX);
-      Serial.print(" ");
-    }
-    Serial.println("");
 
     // Send reply
     stopTransmit();
@@ -2010,7 +1990,6 @@ void TeensyDmx::startReceive()
 
 void TeensyDmx::stopReceive()
 {
-    Serial.println("Stop Rx");
     m_uart.end();
 
     if (&m_uart == &Serial1) {
@@ -2117,7 +2096,6 @@ void TeensyDmx::handleByte(uint8_t c)
                     m_state = State::RDM_RECV;
                     break;
                 default:
-                    Serial.println("Got an ASC start code!");
                     // ASC
                     m_state = State::IDLE;
                     break;
@@ -2221,7 +2199,6 @@ void TeensyDmx::handleByte(uint8_t c)
             break;
         default:
             // Discarding bytes
-            Serial.println(c, HEX);
             break;
     }
 }
@@ -2230,33 +2207,6 @@ void TeensyDmx::loop()
 {
     if (m_rdmNeedsProcessing)
     {
-        Serial.println("Got some RDM to process");
-        switch (m_controllerState)
-        {
-            case ControllerState::RDM_DUB:
-                {
-                    DiscUniqueBranchResponse *dub_response =
-                        reinterpret_cast<DiscUniqueBranchResponse*>(&m_rdmBuffer);
-                    for(int i = 0; i < 12; i++)
-                    {
-                      Serial.print(dub_response->maskedDevID[i], HEX);
-                      Serial.print(" ");
-                    }
-                    Serial.println("");
-                }
-                break;
-            case ControllerState::RDM_MESSAGE:
-                for(int i = 0; i < m_rdmBuffer.length; i++)
-                {
-                  Serial.print(reinterpret_cast<uint8_t*>(&m_rdmBuffer)[i], HEX);
-                  Serial.print(" ");
-                }
-                Serial.println("");
-                break;
-            default:
-                // Do nothing, unknown state
-                break;
-        }
         m_rdmNeedsProcessing = false;
         if (m_mode == DMX_OUT) {
             switch (m_controllerState)
