@@ -1109,7 +1109,7 @@ void TeensyDmx::sendRDMGetPanTiltSwap(byte *uid) {
 
 
 void TeensyDmx::sendRDMSetPanTiltSwap(byte *uid, bool swap) {
-    if (invert) {
+    if (swap) {
         m_rdmBuffer.data[0] = 1;
     } else {
         m_rdmBuffer.data[0] = 0;
@@ -1142,8 +1142,8 @@ void TeensyDmx::sendRDMGetLampState(byte *uid) {
 
 
 void TeensyDmx::sendRDMSetLampState(byte *uid, uint8_t lamp_state) {
-    if ((lamp_state >= 0) && (lamp_state <= 3) ||
-        (lamp_state >= 128) && (lamp_state <= 223)) {
+    if (((lamp_state >= 0) && (lamp_state <= 3)) ||
+        ((lamp_state >= 128) && (lamp_state <= 223))) {
         m_rdmBuffer.data[0] = lamp_state;
         m_rdmBuffer.dataLength = 1;
 
@@ -1160,8 +1160,8 @@ void TeensyDmx::sendRDMGetLampOnMode(byte *uid) {
 
 
 void TeensyDmx::sendRDMSetLampOnMode(byte *uid, uint8_t mode) {
-    if ((mode >= 0) && (mode <= 3) ||
-        (mode >= 128) && (mode <= 223)) {
+    if (((mode >= 0) && (mode <= 3)) ||
+        ((mode >= 128) && (mode <= 223))) {
         m_rdmBuffer.data[0] = mode;
         m_rdmBuffer.dataLength = 1;
 
@@ -1173,7 +1173,7 @@ void TeensyDmx::sendRDMSetLampOnMode(byte *uid, uint8_t mode) {
 void TeensyDmx::sendRDMGetPowerOnSelfTest(byte *uid) {
     m_rdmBuffer.dataLength = 0;
 
-    buildSendRDMMessage(uid, E120_GET_COMMAND, E120_POWER_ON_SELF_TEST);
+    buildSendRDMMessage(uid, E120_GET_COMMAND, E137_1_POWER_ON_SELF_TEST);
 }
 
 
@@ -1185,7 +1185,7 @@ void TeensyDmx::sendRDMSetPowerOnSelfTest(byte *uid, bool power_on_self_test) {
     }
     m_rdmBuffer.dataLength = 1;
 
-    buildSendRDMMessage(uid, E120_SET_COMMAND, E120_POWER_ON_SELF_TEST);
+    buildSendRDMMessage(uid, E120_SET_COMMAND, E137_1_POWER_ON_SELF_TEST);
 }
 
 
