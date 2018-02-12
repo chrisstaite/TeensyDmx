@@ -30,7 +30,7 @@ struct DeviceInfoGetResponse
 static_assert((sizeof(DeviceInfoGetResponse) == 19),
               "Invalid size for DeviceInfoGetResponse struct, is it packed?");
 
-// The DmxPersonalityGetResponse structure (length = 2) has to be responsed for
+// The DmxPersonalityGetResponse structure (length = 2) has to be responded for
 // E120_DMX_PERSONALITY.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=224
 struct DmxPersonalityGetResponse
 {
@@ -51,7 +51,7 @@ struct DmxPersonalityDescriptionGetResponse
 static_assert((sizeof(DmxPersonalityDescriptionGetResponse) == 35),
               "Invalid size for DmxPersonalityDescriptionGetResponse struct, is it packed?");
 
-// The SelfTestDescriptionGetResponse structure (length = 3 to 35) has to be responsed for
+// The SelfTestDescriptionGetResponse structure (length = 3 to 35) has to be responded for
 // E120_SELF_TEST_DESCRIPTION.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=4129
 struct SelfTestDescriptionGetResponse
 {
@@ -61,7 +61,7 @@ struct SelfTestDescriptionGetResponse
 static_assert((sizeof(SelfTestDescriptionGetResponse) == 33),
               "Invalid size for SelfTestDescriptionGetResponse struct, is it packed?");
 
-// The CommsStatusGetResponse structure (length = 6) has to be responsed for
+// The CommsStatusGetResponse structure (length = 6) has to be responded for
 // E120_COMMS_STATUS.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=21
 struct CommsStatusGetResponse
 {
