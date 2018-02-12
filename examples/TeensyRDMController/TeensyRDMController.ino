@@ -61,7 +61,7 @@ void printRdm(CallbackStatus callbackStatus, RdmData *data) {
     }
     Serial.println("");
   } else {
-    Serial.println("Discovery CB failed");
+    Serial.println("RDM CB failed");
   }
 }
 
