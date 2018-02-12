@@ -40,7 +40,7 @@ struct DmxPersonalityGetResponse
 static_assert((sizeof(DmxPersonalityGetResponse) == 2),
               "Invalid size for DmxPersonalityGetResponse struct, is it packed?");
 
-// The DmxPersonalityDescriptionGetResponse structure (length = 3 to 35) has to be responsed for
+// The DmxPersonalityDescriptionGetResponse structure (length = 3 to 35) has to be responded for
 // E120_DMX_PERSONALITY_DESCRIPTION.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=225
 struct DmxPersonalityDescriptionGetResponse
 {
