@@ -2163,15 +2163,19 @@ void TeensyDmx::handleByte(uint8_t c)
             }
             break;
         case State::RDM_DUB_CHECKSUM_3:
-            m_rdmChecksum = (c << 8);
+            // This checksum byte gets bitwise shifted to the correct byte in
+            // RDM_DUB_CHECKSUM_1
+            m_rdmChecksum = c;
             m_state = State::RDM_DUB_CHECKSUM_2;
             break;
         case State::RDM_DUB_CHECKSUM_2:
-            m_rdmChecksum = (m_rdmChecksum & (c << 8));
+            // This checksum byte gets bitwise shifted to the correct byte in
+            // RDM_DUB_CHECKSUM_1
+            m_rdmChecksum = m_rdmChecksum & c;
             m_state = State::RDM_DUB_CHECKSUM_1;
             break;
         case State::RDM_DUB_CHECKSUM_1:
-            m_rdmChecksum = (m_rdmChecksum | c);
+            m_rdmChecksum = ((m_rdmChecksum << 8) | c);
             m_state = State::RDM_DUB_CHECKSUM_0;
             break;
         case State::RDM_DUB_CHECKSUM_0:

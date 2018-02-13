@@ -58,9 +58,9 @@ struct RdmData
 static_assert((sizeof(RdmData) == 255),
               "Invalid size for RdmData struct, is it packed?");
 
-using rdmControllerCallback = void(*)(CallbackStatus, RdmData*);
+using RdmControllerCallback = void(*)(CallbackStatus, RdmData*);
 
-using rdmDiscoveryCallback = void(*)(CallbackStatus, byte*, uint32_t);
+using RdmDiscoveryCallback = void(*)(CallbackStatus, byte*, uint32_t);
 
 struct RdmInit
 {
@@ -75,8 +75,8 @@ struct RdmInit
     uint16_t startAddress;
     const uint16_t additionalCommandsLength;
     const uint16_t *additionalCommands;
-    rdmDiscoveryCallback discoveryCallback;
-    rdmControllerCallback controllerCallback;
+    RdmDiscoveryCallback discoveryCallback;
+    RdmControllerCallback controllerCallback;
 };
 
 class TeensyDmx
@@ -184,11 +184,29 @@ class TeensyDmx
     TeensyDmx(const TeensyDmx&);
     TeensyDmx& operator=(const TeensyDmx&);
 
-    enum State { IDLE, BREAK,
-                 DMX_TX,
-                 DMX_RECV, DMX_COMPLETE,
-                 RDM_RECV, RDM_RECV_CHECKSUM_HI, RDM_RECV_CHECKSUM_LO, RDM_RECV_POST_CHECKSUM,
-                 RDM_DUB_PREAMBLE, RDM_DUB_RECV, RDM_DUB_CHECKSUM_3, RDM_DUB_CHECKSUM_2, RDM_DUB_CHECKSUM_1, RDM_DUB_CHECKSUM_0, RDM_DUB_POST_CHECKSUM };
+    enum State {
+                 // General states:
+                 IDLE,  // Waiting for data
+                 BREAK,  // In break
+                 // DMX transmit states:
+                 DMX_TX,  // In DMX transmit
+                 // DMX receive states:
+                 DMX_RECV,  // Receiving a DMX frame
+                 DMX_COMPLETE,  // DMX frame complete
+                 // RDM general receive states
+                 RDM_RECV,  // Receiving an RDM packet
+                 RDM_RECV_CHECKSUM_HI,  // RDM checksum high byte
+                 RDM_RECV_CHECKSUM_LO,  // RDM checksum low byte
+                 RDM_RECV_POST_CHECKSUM,  // Excess bytes after checksum
+                 // RDM DUB states
+                 RDM_DUB_PREAMBLE,  // DUB preamble
+                 RDM_DUB_RECV,  // Receiving an RDM DUB packet
+                 RDM_DUB_CHECKSUM_3,  // RDM DUB checksum 3
+                 RDM_DUB_CHECKSUM_2,  // RDM DUB checksum 2
+                 RDM_DUB_CHECKSUM_1,  // RDM DUB checksum 1
+                 RDM_DUB_CHECKSUM_0,  // RDM DUB checksum 0
+                 RDM_DUB_POST_CHECKSUM  // Excess bytes after RDM checksum
+               };
 
     enum ControllerState { CONTROLLER_IDLE, RDM_DUB, RDM_DUB_COLLISION, RDM_BROADCAST, RDM_TIMEOUT, RDM_CHECKSUM_ERROR, RDM_MESSAGE };
 
