@@ -1064,7 +1064,7 @@ void TeensyDmx::sendRDMGetDmxPersonality(byte *uid) {
 
 
 void TeensyDmx::sendRDMSetDmxPersonality(byte *uid, uint8_t personality) {
-    if (personality > 1) {
+    if (personality >= 1) {
         m_rdmBuffer.data[0] = personality;
         m_rdmBuffer.dataLength = 1;
 
@@ -1074,7 +1074,7 @@ void TeensyDmx::sendRDMSetDmxPersonality(byte *uid, uint8_t personality) {
 
 
 void TeensyDmx::sendRDMGetDmxPersonalityDescription(byte *uid, uint8_t personality) {
-    if (personality > 1) {
+    if (personality >= 1) {
         m_rdmBuffer.data[0] = personality;
         m_rdmBuffer.dataLength = 1;
 
