@@ -127,6 +127,10 @@ struct DiscUniqueBranchResponse
 static_assert((sizeof(DiscUniqueBranchResponse) == 24),
               "Invalid size for DiscUniqueBranchResponse struct, is it packed?");
 
+enum { RDM_DUB_PREAMBLE_SIZE = (
+           sizeof(((DiscUniqueBranchResponse *)0)->headerFE) +
+           sizeof(((DiscUniqueBranchResponse *)0)->headerAA)) };
+
 enum { RDM_PACKET_SIZE_NO_PD = (sizeof(RdmData) - RDM_MAX_PARAMETER_DATA_LENGTH) };
 static_assert((RDM_PACKET_SIZE_NO_PD == 24),
               "Invalid size for RDM packet without parameter data");
@@ -599,7 +603,8 @@ void TeensyDmx::rdmDiscUniqueBranch()
         setDirection(true);
         // No break for DUB
         m_uart.begin(DMXSPEED, DMXFORMAT);
-        m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer), sizeof(DiscUniqueBranchResponse));
+        m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
+                     sizeof(DiscUniqueBranchResponse));
         m_uart.flush();
         startReceive();
     }
@@ -907,13 +912,7 @@ bool TeensyDmx::isForVendor(const byte* id)
     {
         return false;
     }
-    for (int i = 2; i < RDM_UID_LENGTH; ++i)
-    {
-        if (id[i] != 0xff) {
-            return false;
-        }
-    }
-    return true;
+    return isForMany(id);
 }
 
 bool TeensyDmx::isForAll(const byte* id)
@@ -923,6 +922,18 @@ bool TeensyDmx::isForAll(const byte* id)
             return false;
         }
         ++id;
+    }
+    return true;
+}
+
+bool TeensyDmx::isForMany(const byte* id)
+{
+    // Broadcast or vendorcast
+    for (int i = 2; i < RDM_UID_LENGTH; ++i)
+    {
+        if (id[i] != 0xff) {
+            return false;
+        }
     }
     return true;
 }
@@ -1275,8 +1286,37 @@ void TeensyDmx::sendRDMSetRecordSensors(byte *uid, uint8_t sensor_number) {
     buildSendRDMMessage(uid, E120_SET_COMMAND, E120_RECORD_SENSORS);
 }
 
+void TeensyDmx::processControllerRDM()
+{
+    switch (m_controllerState)
+    {
+        case ControllerState::RDM_DUB:
+        case ControllerState::RDM_DUB_COLLISION:
+            processDiscovery();
+            break;
+        case ControllerState::RDM_MESSAGE:
+            if (m_rdm != nullptr && m_rdm->controllerCallback != nullptr) {
+                m_rdm->controllerCallback(CallbackStatus::CB_SUCCESS, &m_rdmBuffer);
+            }
+            break;
+        case ControllerState::RDM_CHECKSUM_ERROR:
+            if (m_rdm != nullptr && m_rdm->controllerCallback != nullptr) {
+                m_rdm->controllerCallback(CallbackStatus::CB_RDM_CHECKSUM_ERROR, NULL);
+            }
+            break;
+        case ControllerState::RDM_BROADCAST:
+            if (m_rdm != nullptr && m_rdm->controllerCallback != nullptr) {
+                m_rdm->controllerCallback(CallbackStatus::CB_RDM_BROADCAST, NULL);
+            }
+            break;
+        default:
+            // Do nothing, unknown state
+            break;
+    }
+}
 
-void TeensyDmx::processRDM()
+
+void TeensyDmx::processResponderRDM()
 {
     if (m_rdm == nullptr) {
         return;
@@ -1401,7 +1441,8 @@ void TeensyDmx::processDiscovery()
                                         dub_response->maskedDevID[i+i+1]);
                 }
                 if (m_rdm != nullptr && m_rdm->discoveryCallback != nullptr) {
-                    m_rdm->discoveryCallback(CallbackStatus::CB_SUCCESS, discoveredUID, 1);
+                    m_rdm->discoveryCallback(CallbackStatus::CB_SUCCESS,
+                                             discoveredUID, 1);
                 }
             }
             break;
@@ -1463,8 +1504,17 @@ void TeensyDmx::buildSendRDMMessage(byte *uid, uint8_t commandClass, uint16_t pi
         m_rdmBuffer.cmdClass = commandClass;
 
         sendRDMMessage();
-        m_controllerState = ControllerState::RDM_MESSAGE;
-        // TODO(Peter): Set to RDM_BROADCAST if dest is broadcast
+        if ((commandClass != E120_DISCOVERY_COMMAND) && isForMany(uid)) {
+            // Don't interfere with discovery messages, but if it's a set or
+            // someone is doing a broadcast get for some crazy reason, don't
+            // expect a reply for broadcast or vendorcast messages
+            m_controllerState = ControllerState::RDM_BROADCAST;
+            m_state = State::IDLE;
+            // Fake up processing of the "data"
+            m_rdmNeedsProcessing = true;
+        } else {
+            m_controllerState = ControllerState::RDM_MESSAGE;
+        }
     }
 }
 
@@ -2128,8 +2178,9 @@ void TeensyDmx::handleByte(uint8_t c)
             m_rdmChecksum = (m_rdmChecksum | c);
             ++m_dmxBufferIndex;
             if (m_rdmChecksum ==
-                    rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
-                                         m_rdmBuffer.length)) {
+                    rdmCalculateChecksum(
+                        reinterpret_cast<uint8_t*>(&m_rdmBuffer),
+                        m_rdmBuffer.length)) {
                 m_rdmNeedsProcessing = true;
             } else {
                 m_controllerState = ControllerState::RDM_CHECKSUM_ERROR;
@@ -2145,7 +2196,7 @@ void TeensyDmx::handleByte(uint8_t c)
             if (c == 0xAA) {
               // We're not interested in DUB preamble bytes, so don't store them
               // Start storing at index 8 so we can use DiscUniqueBranchResponse struct
-              m_dmxBufferIndex = 8;
+              m_dmxBufferIndex = RDM_DUB_PREAMBLE_SIZE;
               m_state = State::RDM_DUB_RECV;
             } else if (c == 0xFE) {
               // Discarding bytes
@@ -2158,7 +2209,9 @@ void TeensyDmx::handleByte(uint8_t c)
         case State::RDM_DUB_RECV:
             reinterpret_cast<uint8_t*>(&m_rdmBuffer)[m_dmxBufferIndex] = c;
             ++m_dmxBufferIndex;
-            if (m_dmxBufferIndex >= (8+12)) {
+            if (m_dmxBufferIndex >=
+                (sizeof(DiscUniqueBranchResponse) -
+                 sizeof(((DiscUniqueBranchResponse *)0)->checksum))) {
                 m_state = State::RDM_DUB_CHECKSUM_3;
             }
             break;
@@ -2182,8 +2235,10 @@ void TeensyDmx::handleByte(uint8_t c)
             m_rdmChecksum = ((m_rdmChecksum & 0xff00) | ((m_rdmChecksum & 0x00ff) & c));
             ++m_dmxBufferIndex;
             if (m_rdmChecksum ==
-                    rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer) + 8,
-                                         12)) {
+                    rdmCalculateChecksum(
+                        (reinterpret_cast<uint8_t*>(&m_rdmBuffer) +
+                         RDM_DUB_PREAMBLE_SIZE),
+                        sizeof(((DiscUniqueBranchResponse *)0)->maskedDevID))) {
                 m_rdmNeedsProcessing = true;
             } else {
                 // Assume a checksum mismatch means a collision
@@ -2216,28 +2271,9 @@ void TeensyDmx::loop()
     {
         m_rdmNeedsProcessing = false;
         if (m_mode == DMX_OUT) {
-            switch (m_controllerState)
-            {
-                case ControllerState::RDM_DUB:
-                case ControllerState::RDM_DUB_COLLISION:
-                    processDiscovery();
-                    break;
-                case ControllerState::RDM_MESSAGE:
-                    if (m_rdm != nullptr && m_rdm->controllerCallback != nullptr) {
-                        m_rdm->controllerCallback(CallbackStatus::CB_SUCCESS, &m_rdmBuffer);
-                    }
-                    break;
-                case ControllerState::RDM_CHECKSUM_ERROR:
-                    if (m_rdm != nullptr && m_rdm->controllerCallback != nullptr) {
-                        m_rdm->controllerCallback(CallbackStatus::CB_RDM_CHECKSUM_ERROR, NULL);
-                    }
-                    break;
-                default:
-                    // Do nothing, unknown state
-                    break;
-            }
+            processControllerRDM();
         } else {
-            processRDM();
+            processResponderRDM();
         }
     }
 }

@@ -32,7 +32,10 @@ void discoveryComplete(CallbackStatus callbackStatus, byte *uids, uint32_t uidCo
       for(int j = 0; j < RDM_UID_LENGTH; j++)
       {
         Serial.print(uids[((i * RDM_UID_LENGTH) + j)], HEX);
-        Serial.print(":");
+        if ((j + 1) < RDM_UID_LENGTH) {
+            // Don't print a colon after the last byte
+            Serial.print(":");
+        }
       }
       Serial.println("");
     }
@@ -60,6 +63,8 @@ void printRdm(CallbackStatus callbackStatus, RdmData *data) {
        Serial.print(char(data->data[i]));
     }
     Serial.println("");
+  } else if (callbackStatus == CallbackStatus::CB_RDM_BROADCAST) {
+    Serial.println("RDM CB was broadcast, no response expected");
   } else {
     Serial.println("RDM CB failed");
   }

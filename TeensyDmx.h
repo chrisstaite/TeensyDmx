@@ -218,7 +218,8 @@ class TeensyDmx
     void setDirection(bool transmit);
 
     void completeFrame();  // Called at error ISR during recv
-    void processRDM();
+    void processControllerRDM();
+    void processResponderRDM();
     void processDiscovery();
     void respondMessage(uint16_t nackReason);
     void buildSendRDMMessage(byte *uid, uint8_t commandClass, uint16_t pid);
@@ -249,6 +250,7 @@ class TeensyDmx
     bool isForMe(const byte* id);
     bool isForVendor(const byte* id);
     bool isForAll(const byte* id);
+    bool isForMany(const byte* id);
 
     void maybeIncrementShortMessage();
     void maybeIncrementChecksumFail();
