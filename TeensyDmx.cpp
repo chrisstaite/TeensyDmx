@@ -198,6 +198,9 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
     m_rdmChange(false),
     m_mode(DMX_OFF),
     m_state(State::IDLE),
+    m_discoveryState(DiscoveryState::DISCOVERY_IDLE),
+    m_nextDiscoveryAction(0),
+    m_uidCount(0),
     m_controllerState(ControllerState::CONTROLLER_IDLE),
     m_redePin(nullptr),
     m_rdmMute(false),
@@ -973,6 +976,39 @@ void TeensyDmx::maybeIncrementChecksumFail()
 }
 
 
+void TeensyDmx::doRDMDiscovery() {
+    m_uidCount = 0;
+    m_discoveryState = DiscoveryState::DISCOVERY_UN_MUTE;
+    m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
+    sendRDMDiscUnMute(RDM_BROADCAST_UID);
+}
+
+void TeensyDmx::progressRDMDiscovery() {
+    if (m_discoveryState != DiscoveryState::DISCOVERY_IDLE) {
+        if (millis() >= m_nextDiscoveryAction) {
+            switch (m_discoveryState)
+            {
+                case DiscoveryState::DISCOVERY_UN_MUTE:
+                {
+                    byte lowerUid[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+                    byte upperUid[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+                    sendRDMDiscUniqueBranch(lowerUid, upperUid);
+                    m_discoveryState = DiscoveryState::DISCOVERY_IDLE;
+                    m_nextDiscoveryAction = 0;
+                    break;
+                }
+                case DiscoveryState::DISCOVERY_DUB:
+                    // Do nothing
+                    break;
+                default:
+                    // Do nothing
+                    break;
+            }
+        }
+    }
+}
+
+
 void TeensyDmx::sendRDMDiscMute(byte *uid) {
     m_rdmBuffer.dataLength = 0;
 
@@ -996,8 +1032,7 @@ void TeensyDmx::sendRDMDiscUniqueBranch(byte *lower_uid, byte *upper_uid) {
 
     m_rdmBuffer.dataLength = sizeof(DiscUniqueBranchRequest);
 
-    byte broadcastUid[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    buildSendRDMMessage(broadcastUid, E120_DISCOVERY_COMMAND, E120_DISC_UNIQUE_BRANCH);
+    buildSendRDMMessage(RDM_BROADCAST_UID, E120_DISCOVERY_COMMAND, E120_DISC_UNIQUE_BRANCH);
     m_state = State::RDM_DUB_PREAMBLE;
     m_controllerState = ControllerState::RDM_DUB;
 }
@@ -1309,6 +1344,7 @@ void TeensyDmx::processControllerRDM()
                 m_rdm->controllerCallback(CallbackStatus::CB_RDM_BROADCAST, NULL);
             }
             break;
+        // TODO(Peter): Handle timeouts
         default:
             // Do nothing, unknown state
             break;
@@ -2275,5 +2311,8 @@ void TeensyDmx::loop()
         } else {
             processResponderRDM();
         }
+    }
+    if (m_mode == DMX_OUT) {
+        progressRDMDiscovery();
     }
 }

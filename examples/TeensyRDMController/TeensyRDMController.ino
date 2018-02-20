@@ -16,8 +16,8 @@ byte myUid[] = {0x7f, 0xf0, 0x20, 0x12, 0x00, 0x00};
 // Broadcast to all devices, broadcasts don't generate a response
 byte theirUid[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
-enum Status { UN_MUTE, UN_MUTE_IDLE, DISCOVERY, DISCOVERY_IDLE, IDENTIFY_ON, IDENTIFY_ON_IDLE, IDENTIFY_OFF, IDENTIFY_OFF_IDLE };
-Status currentState = UN_MUTE;
+enum Status { DISCOVERY, DISCOVERY_IDLE, IDENTIFY_ON, IDENTIFY_ON_IDLE, IDENTIFY_OFF, IDENTIFY_OFF_IDLE };
+Status currentState = DISCOVERY;
 unsigned long lastAction = 0;
 
 void discoveryComplete(CallbackStatus callbackStatus, byte *uids, uint32_t uidCount) {
@@ -90,10 +90,6 @@ TeensyDmx Dmx(Serial1, &rdmData, DMX_REDE);
 
 byte DMXVal[] = {50};
 
-byte lowerUid[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-byte upperUid[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-byte broadcastUid[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
 void setup() {
   Dmx.setMode(TeensyDmx::DMX_OUT);
 }
@@ -102,19 +98,8 @@ void loop() {
   //Dmx.setChannels(0, DMXVal, 1);
   switch (currentState)
   {
-    case UN_MUTE:
-      lastAction = millis();
-      Dmx.sendRDMDiscUnMute(broadcastUid);
-      currentState = UN_MUTE_IDLE;
-      break;
-    case UN_MUTE_IDLE:
-      if ((millis() - lastAction) > 1000) {
-        currentState = DISCOVERY;
-      }
-      break;
     case DISCOVERY:
-      lastAction = millis();
-      Dmx.sendRDMDiscUniqueBranch(lowerUid, upperUid);
+      Dmx.doRDMDiscovery();
       currentState = DISCOVERY_IDLE;
       break;
     case DISCOVERY_IDLE:

@@ -82,6 +82,8 @@ struct RdmInit
 class TeensyDmx
 {
   public:
+    byte RDM_BROADCAST_UID[RDM_UID_LENGTH] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
     enum Mode { DMX_OFF, DMX_IN, DMX_OUT };
 
     TeensyDmx(HardwareSerial& uart, struct RdmInit* rdm, uint8_t redePin);
@@ -142,6 +144,10 @@ class TeensyDmx
     {
         setChannels(startAddress - 1, values, length);
     }
+
+    void doRDMDiscovery();
+
+    enum { DISCOVERY_ACTION_OFFSET = 1000 };
 
     void sendRDMDiscMute(byte *uid);
     void sendRDMDiscUnMute(byte *uid);
@@ -208,6 +214,8 @@ class TeensyDmx
                  RDM_DUB_POST_CHECKSUM  // Excess bytes after RDM checksum
                };
 
+    enum DiscoveryState { DISCOVERY_IDLE, DISCOVERY_UN_MUTE, DISCOVERY_DUB };
+
     enum ControllerState { CONTROLLER_IDLE, RDM_DUB, RDM_DUB_COLLISION, RDM_BROADCAST, RDM_TIMEOUT, RDM_CHECKSUM_ERROR, RDM_MESSAGE };
 
     void startTransmit();
@@ -216,6 +224,8 @@ class TeensyDmx
     void stopReceive();
 
     void setDirection(bool transmit);
+
+    void progressRDMDiscovery();
 
     void completeFrame();  // Called at error ISR during recv
     void processControllerRDM();
@@ -271,6 +281,9 @@ class TeensyDmx
     volatile bool m_rdmChange;
     Mode m_mode;
     State m_state;
+    DiscoveryState m_discoveryState;
+    unsigned long m_nextDiscoveryAction;
+    uint32_t m_uidCount;
     ControllerState m_controllerState;
     volatile uint8_t* m_redePin;
     bool m_rdmMute;
