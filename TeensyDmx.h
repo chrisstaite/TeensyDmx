@@ -155,7 +155,7 @@ class TeensyDmx
     enum { RDM_TIMEOUT_DURATION = 2000 };
     enum { RDM_DUB_TIMEOUT_DURATION = 100 };
 
-    enum { DISCOVERY_ACTION_OFFSET = RDM_DUB_TIMEOUT_DURATION + 1000 };
+    enum { DISCOVERY_ACTION_OFFSET = RDM_DUB_TIMEOUT_DURATION * 2 };
 
     void sendRDMDiscMute(byte *uid);
     void sendRDMDiscUnMute(byte *uid);
