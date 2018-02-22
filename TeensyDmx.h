@@ -155,7 +155,8 @@ class TeensyDmx
     enum { RDM_TIMEOUT_DURATION = 2000 };
     enum { RDM_DUB_TIMEOUT_DURATION = 100 };
 
-    enum { DISCOVERY_ACTION_OFFSET = RDM_DUB_TIMEOUT_DURATION * 2 };
+    enum { DUB_ACTION_OFFSET = RDM_DUB_TIMEOUT_DURATION * 2 };
+    enum { DISCOVERY_ACTION_OFFSET = RDM_TIMEOUT_DURATION * 2 };
 
     void sendRDMDiscMute(byte *uid);
     void sendRDMDiscUnMute(byte *uid);
@@ -224,7 +225,7 @@ class TeensyDmx
                  RDM_DUB_POST_CHECKSUM  // Excess bytes after RDM checksum
                };
 
-    enum DiscoveryState { DISCOVERY_IDLE, DISCOVERY_UN_MUTE, DISCOVERY_DUB };
+    enum DiscoveryState { DISCOVERY_IDLE, DISCOVERY_MUTE, DISCOVERY_UN_MUTE, DISCOVERY_DUB };
 
     enum ControllerState { CONTROLLER_IDLE, RDM_DUB, RDM_DUB_COLLISION, RDM_DUB_TIMEOUT, RDM_BROADCAST, RDM_TIMEOUT, RDM_CHECKSUM_ERROR, RDM_MESSAGE };
 
@@ -300,8 +301,8 @@ class TeensyDmx
     uint64_t m_dubQueue[MAX_DUB_QUEUE * 2];
     uint8_t m_dubPointer;
 
-    uint64_t m_dubLowerboundUid;
-    uint64_t m_dubUpperboundUid;
+    uint64_t m_dubLowerBoundUid;
+    uint64_t m_dubUpperBoundUid;
     enum { MAX_UID_LIST = 40 };
     uint8_t m_uidList[MAX_UID_LIST * RDM_UID_LENGTH];
     uint8_t m_uidCount;

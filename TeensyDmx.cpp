@@ -213,8 +213,8 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
     m_nextDiscoveryAction(0),
     m_dubQueue{0},
     m_dubPointer(0),
-    m_dubLowerboundUid(RDM_MIN_LOWER_BOUND_UID),
-    m_dubUpperboundUid(RDM_MAX_UPPER_BOUND_UID),
+    m_dubLowerBoundUid(RDM_MIN_LOWER_BOUND_UID),
+    m_dubUpperBoundUid(RDM_MAX_UPPER_BOUND_UID),
     m_uidList{0},
     m_uidCount(0),
     m_controllerState(ControllerState::CONTROLLER_IDLE),
@@ -999,10 +999,13 @@ void TeensyDmx::doRDMDiscovery() {
     m_uidCount = 0;
     m_dubPointer = 0;
     m_discoveryState = DiscoveryState::DISCOVERY_UN_MUTE;
-    m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
-    m_dubLowerboundUid = RDM_MIN_LOWER_BOUND_UID;
-    m_dubUpperboundUid = RDM_MAX_UPPER_BOUND_UID;
-    sendRDMDiscUnMute(RDM_BROADCAST_UID);
+    // Action queued, do it ASAP
+    m_nextDiscoveryAction = 0;
+    m_dubLowerBoundUid = RDM_MIN_LOWER_BOUND_UID;
+    m_dubUpperBoundUid = RDM_MAX_UPPER_BOUND_UID;
+    m_dubQueue[(m_dubPointer * 2)] = m_dubLowerBoundUid;
+    m_dubQueue[(m_dubPointer * 2) + 1] = m_dubUpperBoundUid;
+    m_dubPointer++;
 }
 
 void TeensyDmx::maybeTimeoutRDMMessage() {
@@ -1052,21 +1055,29 @@ void TeensyDmx::maybeProgressRDMDiscovery() {
         if (millis() >= m_nextDiscoveryAction) {
             switch (m_discoveryState)
             {
+                case DiscoveryState::DISCOVERY_MUTE:
+                    if (m_uidCount > 0) {
+                      // Mute the last UID discovered
+                      sendRDMDiscMute(&m_uidList[((m_uidCount - 1) * RDM_UID_LENGTH)]);
+                    }
+                    m_discoveryState = DiscoveryState::DISCOVERY_DUB;
+                    m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
+                    break;
                 case DiscoveryState::DISCOVERY_UN_MUTE:
-                    sendRDMDiscUniqueBranch(m_dubLowerboundUid, m_dubUpperboundUid);
+                    sendRDMDiscUnMute(RDM_BROADCAST_UID);
                     m_discoveryState = DiscoveryState::DISCOVERY_DUB;
                     m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
                     break;
                 case DiscoveryState::DISCOVERY_DUB:
                     if (m_dubPointer > 0) {
-                        m_dubLowerboundUid = m_dubQueue[((m_dubPointer - 1) * 2)];
-                        m_dubUpperboundUid = m_dubQueue[((m_dubPointer - 1) * 2) + 1];
-                        sendRDMDiscUniqueBranch(m_dubLowerboundUid, m_dubUpperboundUid);
+                        m_dubLowerBoundUid = m_dubQueue[((m_dubPointer - 1) * 2)];
+                        m_dubUpperBoundUid = m_dubQueue[((m_dubPointer - 1) * 2) + 1];
+                        sendRDMDiscUniqueBranch(m_dubLowerBoundUid, m_dubUpperBoundUid);
                         // Remove the item from the queue
                         m_dubPointer--;
                         Serial.print("DUB pointer now ");
                         Serial.println(m_dubPointer);
-                        m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
+                        m_nextDiscoveryAction = millis() + DUB_ACTION_OFFSET;
                     }
                     break;
                 default:
@@ -1082,6 +1093,17 @@ void TeensyDmx::maybeProgressRDMDiscovery() {
 
 void TeensyDmx::sendRDMDiscMute(byte *uid) {
     m_rdmBuffer.dataLength = 0;
+
+    Serial.print("Mute to ");
+    for(int j = 0; j < RDM_UID_LENGTH; j++)
+    {
+      Serial.print(uid[j], HEX);
+      if ((j + 1) < RDM_UID_LENGTH) {
+          // Don't print a colon after the last byte
+          Serial.print(":");
+      }
+    }
+    Serial.println("");
 
     buildSendRDMMessage(uid, E120_DISCOVERY_COMMAND, E120_DISC_MUTE);
 }
@@ -1597,6 +1619,8 @@ void TeensyDmx::processDiscovery()
     {
         case ControllerState::RDM_DUB:
             {
+                // Requeue the existing DUB, in case it was masking another UID
+                m_dubPointer++;
                 DiscUniqueBranchResponse *dub_response =
                     reinterpret_cast<DiscUniqueBranchResponse*>(&m_rdmBuffer);
                 for(int i = 0; i < RDM_UID_LENGTH; i++)
@@ -1608,43 +1632,29 @@ void TeensyDmx::processDiscovery()
                 m_uidCount++;
                 Serial.print("Found a UID! UID count now ");
                 Serial.println(m_uidCount);
-                if (m_dubPointer > 0) {
-                  // Keep discovering...
-                  Serial.println("Pausing before next DUB");
-                  m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
-                } else {
-                  // Nothing left to do, return the list
-                  if (m_rdm != nullptr && m_rdm->discoveryCallback != nullptr) {
-                      m_rdm->discoveryCallback(CallbackStatus::CB_SUCCESS,
-                                               m_uidList, m_uidCount);
-                  }
-                }
+                m_discoveryState = DiscoveryState::DISCOVERY_MUTE;
+                m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
             }
             break;
         case ControllerState::RDM_DUB_COLLISION:
         {
             Serial.println("Collision");
             //Serial.println("Doing binary search");
-            //uint64_t midPosition = ((m_dubLowerboundUid & (0x0000800000000000-1)) +
-            //                         (m_dubUpperboundUid & (0x0000800000000000-1))) / 2)
-            //                       + ((m_dubUpperboundUid & 0x0000800000000000) ? 0x0000400000000000 : 0)
-            //                       + ((m_dubLowerboundUid & 0x0000800000000000) ? 0x0000400000000000 : 0);
-            uint64_t midPosition = ((m_dubLowerboundUid + m_dubUpperboundUid) / 2);
-            //delay(1000);
-            //sendRDMDiscUniqueBranch(MidPosition + 1, UpperBound);
-            //m_dubLowerboundUid =
-            //sendRDMDiscUniqueBranch(LowerBound, MidPosition);
-            //sendRDMDiscUniqueBranch(m_dubLowerboundUid, m_dubUpperboundUid);
-            m_dubQueue[(m_dubPointer * 2)] = m_dubLowerboundUid;
+            //uint64_t midPosition = ((m_dubLowerBoundUid & (0x0000800000000000-1)) +
+            //                         (m_dubUpperBoundUid & (0x0000800000000000-1))) / 2)
+            //                       + ((m_dubUpperBoundUid & 0x0000800000000000) ? 0x0000400000000000 : 0)
+            //                       + ((m_dubLowerBoundUid & 0x0000800000000000) ? 0x0000400000000000 : 0);
+            uint64_t midPosition = ((m_dubLowerBoundUid + m_dubUpperBoundUid) / 2);
+            m_dubQueue[(m_dubPointer * 2)] = m_dubLowerBoundUid;
             m_dubQueue[(m_dubPointer * 2) + 1] = midPosition;
             m_dubPointer++;
             m_dubQueue[(m_dubPointer * 2)] = (midPosition + 1);
-            m_dubQueue[(m_dubPointer * 2) + 1] = m_dubUpperboundUid;
+            m_dubQueue[(m_dubPointer * 2) + 1] = m_dubUpperBoundUid;
             m_dubPointer++;
             Serial.print("DUB pointer now ");
             Serial.println(m_dubPointer);
             Serial.println("Pausing before next DUB");
-            m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
+            m_nextDiscoveryAction = millis() + DUB_ACTION_OFFSET;
             //Serial.println(millis());
             //Serial.println(m_nextDiscoveryAction);
             //m_dubUpperboundUid = MidPosition;
@@ -1656,7 +1666,7 @@ void TeensyDmx::processDiscovery()
             if (m_dubPointer > 0) {
               // Keep discovering...
               Serial.println("Pausing before next DUB");
-              m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
+              m_nextDiscoveryAction = millis() + DUB_ACTION_OFFSET;
             } else {
               // Nothing left to do, return the list
               if (m_rdm != nullptr && m_rdm->discoveryCallback != nullptr) {
