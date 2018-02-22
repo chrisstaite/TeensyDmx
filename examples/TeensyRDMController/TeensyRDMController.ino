@@ -22,26 +22,30 @@ unsigned long lastAction = 0;
 
 void discoveryComplete(CallbackStatus callbackStatus, byte *uids, uint32_t uidCount) {
   if (callbackStatus == CallbackStatus::CB_SUCCESS) {
-    Serial.println("Printing UIDs:");
+    if (uidCount > 0) {
+      Serial.println("Printing UIDs:");
 
-    Serial.print("Length: ");
-    Serial.println(uidCount);
+      Serial.print("Length: ");
+      Serial.println(uidCount);
 
-    for(uint32_t i = 0; i < uidCount; i++)
-    {
-      for(int j = 0; j < RDM_UID_LENGTH; j++)
+      for(uint32_t i = 0; i < uidCount; i++)
       {
-        Serial.print(uids[((i * RDM_UID_LENGTH) + j)], HEX);
-        if ((j + 1) < RDM_UID_LENGTH) {
-            // Don't print a colon after the last byte
-            Serial.print(":");
+        for(int j = 0; j < RDM_UID_LENGTH; j++)
+        {
+          Serial.print(uids[((i * RDM_UID_LENGTH) + j)], HEX);
+          if ((j + 1) < RDM_UID_LENGTH) {
+              // Don't print a colon after the last byte
+              Serial.print(":");
+          }
         }
+        Serial.println("");
       }
       Serial.println("");
+      memcpy(theirUid, uids, RDM_UID_LENGTH);
+      currentState = IDENTIFY_ON;
+    } else {
+      Serial.println("No UIDs returned");
     }
-    Serial.println("");
-    memcpy(theirUid, uids, RDM_UID_LENGTH);
-    currentState = IDENTIFY_ON;
   } else {
     Serial.println("Discovery CB failed");
   }
@@ -64,7 +68,9 @@ void printRdm(CallbackStatus callbackStatus, RdmData *data) {
     }
     Serial.println("");
   } else if (callbackStatus == CallbackStatus::CB_RDM_BROADCAST) {
-    Serial.println("RDM CB was broadcast, no response expected");
+    Serial.println("RDM message was broadcast, no response expected");
+  } else if (callbackStatus == CallbackStatus::CB_RDM_TIMEOUT) {
+    Serial.println("RDM message timed out");
   } else {
     Serial.println("RDM CB failed");
   }

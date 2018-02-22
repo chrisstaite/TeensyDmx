@@ -35,6 +35,11 @@ enum { RDM_UID_LENGTH = 6 };
 enum { RDM_MAX_STRING_LENGTH = 32 };
 enum { RDM_MAX_PARAMETER_DATA_LENGTH = 231 };
 enum { RDM_ROOT_DEVICE = 0 };
+enum { RDM_MIN_LOWER_BOUND_UID = 0x0000000000000000 };
+enum { RDM_MAX_UPPER_BOUND_UID = 0x00007fffffffffff };
+//64:6F:0:0:0:0 to 64:6F:0:0:FF:FF
+//enum { RDM_MIN_LOWER_BOUND_UID = 0x0000646f00000000 };
+//enum { RDM_MAX_UPPER_BOUND_UID = 0x0000646f0000ffff };
 
 enum CallbackStatus { CB_SUCCESS, CB_RDM_BROADCAST, CB_RDM_TIMEOUT, CB_RDM_CHECKSUM_ERROR };
 
@@ -147,11 +152,15 @@ class TeensyDmx
 
     void doRDMDiscovery();
 
-    enum { DISCOVERY_ACTION_OFFSET = 1000 };
+    enum { RDM_TIMEOUT_DURATION = 2000 };
+    enum { RDM_DUB_TIMEOUT_DURATION = 100 };
+
+    enum { DISCOVERY_ACTION_OFFSET = RDM_DUB_TIMEOUT_DURATION + 1000 };
 
     void sendRDMDiscMute(byte *uid);
     void sendRDMDiscUnMute(byte *uid);
     void sendRDMDiscUniqueBranch(byte *lower_uid, byte *upper_uid);
+    void sendRDMDiscUniqueBranch(uint64_t lower_uid, uint64_t upper_uid);
     void sendRDMGetDeviceInfo(byte *uid);
     void sendRDMGetIdentifyDevice(byte *uid);
     void sendRDMSetIdentifyDevice(byte *uid, bool identify_state);
@@ -205,6 +214,7 @@ class TeensyDmx
                  RDM_RECV_CHECKSUM_LO,  // RDM checksum low byte
                  RDM_RECV_POST_CHECKSUM,  // Excess bytes after checksum
                  // RDM DUB states
+                 RDM_DUB_PRE_PREAMBLE,  // Awaiting DUB preamble
                  RDM_DUB_PREAMBLE,  // DUB preamble
                  RDM_DUB_RECV,  // Receiving an RDM DUB packet
                  RDM_DUB_CHECKSUM_3,  // RDM DUB checksum 3
@@ -216,7 +226,7 @@ class TeensyDmx
 
     enum DiscoveryState { DISCOVERY_IDLE, DISCOVERY_UN_MUTE, DISCOVERY_DUB };
 
-    enum ControllerState { CONTROLLER_IDLE, RDM_DUB, RDM_DUB_COLLISION, RDM_BROADCAST, RDM_TIMEOUT, RDM_CHECKSUM_ERROR, RDM_MESSAGE };
+    enum ControllerState { CONTROLLER_IDLE, RDM_DUB, RDM_DUB_COLLISION, RDM_DUB_TIMEOUT, RDM_BROADCAST, RDM_TIMEOUT, RDM_CHECKSUM_ERROR, RDM_MESSAGE };
 
     void startTransmit();
     void stopTransmit();
@@ -225,13 +235,15 @@ class TeensyDmx
 
     void setDirection(bool transmit);
 
-    void progressRDMDiscovery();
+    void maybeTimeoutRDMMessage();
+    void maybeProgressRDMDiscovery();
 
     void completeFrame();  // Called at error ISR during recv
     void processControllerRDM();
     void processResponderRDM();
     void processDiscovery();
     void respondMessage(uint16_t nackReason);
+    void sendRDMDiscUniqueBranch();
     void buildSendRDMMessage(byte *uid, uint8_t commandClass, uint16_t pid);
     void sendRDMMessage();
     void handleByte(uint8_t c);
@@ -279,11 +291,20 @@ class TeensyDmx
     volatile uint16_t m_lengthMismatch;
     volatile bool m_newFrame;
     volatile bool m_rdmChange;
+    unsigned long m_rdmResponseDue;
     Mode m_mode;
     State m_state;
     DiscoveryState m_discoveryState;
     unsigned long m_nextDiscoveryAction;
-    uint32_t m_uidCount;
+    enum { MAX_DUB_QUEUE = 30 };
+    uint64_t m_dubQueue[MAX_DUB_QUEUE * 2];
+    uint8_t m_dubPointer;
+
+    uint64_t m_dubLowerboundUid;
+    uint64_t m_dubUpperboundUid;
+    enum { MAX_UID_LIST = 40 };
+    uint8_t m_uidList[MAX_UID_LIST * RDM_UID_LENGTH];
+    uint8_t m_uidCount;
     ControllerState m_controllerState;
     volatile uint8_t* m_redePin;
     bool m_rdmMute;
