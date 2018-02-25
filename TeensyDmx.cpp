@@ -1,27 +1,19 @@
 #include "TeensyDmx.h"
 #include "rdm.h"
+#include <limits>
 
-static constexpr uint32_t BREAKSPEED = 100000;
-static constexpr uint32_t RDM_BREAKSPEED = 45500;
-static constexpr uint32_t BREAKFORMAT = SERIAL_8E1;
-static constexpr uint32_t DMXSPEED = 250000;
-static constexpr uint32_t DMXFORMAT = SERIAL_8N2;
-static constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
+namespace {
 
-// It was an easy job to register a manufacturer id to myself as explained
-// on http://tsp.esta.org/tsp/working_groups/CP/mfctrIDs.php.
-// The ID below is designated as a prototyping ID.
-static constexpr byte _devID[] = { 0x7f, 0xf0, 0x20, 0x12, 0x00, 0x00 };
+constexpr uint32_t BREAKSPEED = 100000;
+constexpr uint32_t RDM_BREAKSPEED = 45500;
+constexpr uint32_t BREAKFORMAT = SERIAL_8E1;
+constexpr uint32_t DMXSPEED = 250000;
+constexpr uint32_t DMXFORMAT = SERIAL_8N2;
+constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
 
-// The Device ID for adressing all devices of a manufacturer.
-static constexpr byte _devIDGroup[] = { 0x7f, 0xf0, 0xFF, 0xFF, 0xFF, 0xFF };
-
-// The Device ID for adressing all devices: 6 times 0xFF.
-static constexpr byte _devIDAll[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-
-// The DEVICE_INFO_GET_RESPONSE structure (length = 19) has to be responsed for E120_DEVICE_INFO
-// See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=96
-struct DEVICE_INFO_GET_RESPONSE
+// The DeviceInfoGetResponse structure (length = 19) has to be responded for
+// E120_DEVICE_INFO.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=96
+struct DeviceInfoGetResponse
 {
   byte protocolMajor;
   byte protocolMinor;
@@ -34,30 +26,93 @@ struct DEVICE_INFO_GET_RESPONSE
   uint16_t startAddress;
   uint16_t subDeviceCount;
   byte sensorCount;
-} __attribute__((__packed__)); // struct DEVICE_INFO_GET_RESPONSE
-static_assert((sizeof(DEVICE_INFO_GET_RESPONSE)==19), "Invalid size for DEVICE_INFO_GET_RESPONSE struct, is it packed?");
+} __attribute__((__packed__));  // struct DeviceInfoGetResponse
+static_assert((sizeof(DeviceInfoGetResponse) == 19),
+              "Invalid size for DeviceInfoGetResponse struct, is it packed?");
+
+// The CommsStatusGetResponse structure (length = 6) has to be responded for
+// E120_COMMS_STATUS.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=21
+struct CommsStatusGetResponse
+{
+  uint16_t shortMessage;
+  uint16_t lengthMismatch;
+  uint16_t checksumFail;
+} __attribute__((__packed__));  // struct CommsStatusGetResponse
+static_assert((sizeof(CommsStatusGetResponse) == 6),
+              "Invalid size for CommsStatusGetResponse struct, is it packed?");
+
+struct DiscUniqueBranchRequest
+{
+  byte lowerBoundUID[RDM_UID_LENGTH];
+  byte upperBoundUID[RDM_UID_LENGTH];
+} __attribute__((__packed__)); // struct DiscUniqueBranchRequest
+static_assert((sizeof(DiscUniqueBranchRequest) == 12),
+              "Invalid size for DiscUniqueBranchRequest struct, is it packed?");
+
+// the special discovery response message
+struct DiscUniqueBranchResponse
+{
+  byte headerFE[7];
+  byte headerAA;
+  byte maskedDevID[12];
+  byte checksum[4];
+} __attribute__((__packed__)); // struct DiscUniqueBranchResponse
+static_assert((sizeof(DiscUniqueBranchResponse) == 24),
+              "Invalid size for DiscUniqueBranchResponse struct, is it packed?");
+
+enum { RDM_PACKET_SIZE_NO_PD = (sizeof(RdmData) - RDM_MAX_PARAMETER_DATA_LENGTH) };
+static_assert((RDM_PACKET_SIZE_NO_PD == 24),
+              "Invalid size for RDM packet without parameter data");
 
 #if defined(HAS_KINETISK_UART5)
 // Instance for UART0, UART1, UART2, UART3, UART4, UART5
-static TeensyDmx *uartInstances[6] = {0};
+TeensyDmx *uartInstances[6] = {0};
 #elif defined(HAS_KINETISK_UART4)
 // Instance for UART0, UART1, UART2, UART3, UART4
-static TeensyDmx *uartInstances[5] = {0};
+TeensyDmx *uartInstances[5] = {0};
 #elif defined(HAS_KINETISK_UART3)
 // Instance for UART0, UART1, UART2, UART3
-static TeensyDmx *uartInstances[4] = {0};
+TeensyDmx *uartInstances[4] = {0};
 #else
 // Instance for UART0, UART1, UART2
-static TeensyDmx *uartInstances[3] = {0};
+TeensyDmx *uartInstances[3] = {0};
 #endif
 
-static inline void putInt(void* const buffer, const size_t offset, const uint16_t value)
+inline uint16_t getUInt16(const byte* const buffer)
 {
-    reinterpret_cast<byte*>(buffer)[offset] = value >> 8;
-    reinterpret_cast<byte*>(buffer)[offset + 1] = value & 0xff;
+    return (buffer[0] << 8) | buffer[1];
 }
 
-TeensyDmx::TeensyDmx(HardwareSerial& uart) :
+inline uint16_t swapUInt16(uint16_t i)
+{
+    return (i << 8) | (i >> 8);
+}
+
+inline void putUInt16(void* const buffer, const uint16_t value)
+{
+    reinterpret_cast<byte*>(buffer)[0] = value >> 8;
+    reinterpret_cast<byte*>(buffer)[1] = value & 0xff;
+}
+
+inline void putUInt32(void* const buffer, const uint32_t value)
+{
+    reinterpret_cast<byte*>(buffer)[0] = (value & 0xff000000) >> 24;
+    reinterpret_cast<byte*>(buffer)[1] = (value & 0x00ff0000) >> 16;
+    reinterpret_cast<byte*>(buffer)[2] = (value & 0x0000ff00) >> 8;
+    reinterpret_cast<byte*>(buffer)[3] = (value & 0x000000ff);
+}
+
+}  // anon namespace
+
+TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm, uint8_t redePin) :
+    TeensyDmx(uart, rdm)
+{
+    pinMode(redePin, OUTPUT);
+    m_redePin = portOutputRegister(redePin);
+    *m_redePin = 0;
+}
+
+TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
     m_uart(uart),
     m_dmxBuffer1{0},
     m_dmxBuffer2{0},
@@ -65,6 +120,9 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart) :
     m_inactiveBuffer(m_dmxBuffer2),
     m_dmxBufferIndex(0),
     m_frameCount(0),
+    m_shortMessage(0),
+    m_checksumFail(0),
+    m_lengthMismatch(0),
     m_newFrame(false),
     m_rdmChange(false),
     m_mode(DMX_OFF),
@@ -72,7 +130,10 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart) :
     m_redePin(nullptr),
     m_rdmMute(false),
     m_identifyMode(false),
-    m_rdm(nullptr),
+    m_rdm(rdm),
+    m_rdmNeedsProcessing(false),
+    m_rdmBuffer(),
+    m_rdmChecksum(0),
     m_deviceLabel{0}
 {
     if (&m_uart == &Serial1) {
@@ -99,30 +160,10 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart) :
 #endif
 }
 
-TeensyDmx::TeensyDmx(HardwareSerial& uart, uint8_t redePin) :
-    TeensyDmx(uart)
-{
-    pinMode(redePin, OUTPUT);
-    m_redePin = portOutputRegister(redePin);
-    *m_redePin = 0;
-}
-
-TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm) :
-    TeensyDmx(uart)
-{
-    m_rdm = rdm;
-}
-
-TeensyDmx::TeensyDmx(HardwareSerial& uart, struct RDMINIT* rdm, uint8_t redePin) :
-    TeensyDmx(uart, redePin)
-{
-    m_rdm = rdm;
-}
-
 const volatile uint8_t* TeensyDmx::getBuffer() const
 {
     if (m_mode == DMX_IN) {
-        // DMX Rx is double buffered due to the interupt handler
+        // DMX Rx is double buffered due to the interrupt handler
         return m_inactiveBuffer;
     } else {
         return m_activeBuffer;
@@ -146,6 +187,21 @@ bool TeensyDmx::isIdentify() const
 const char* TeensyDmx::getLabel() const
 {
     return m_deviceLabel;
+}
+
+const volatile uint16_t TeensyDmx::getShortMessage() const
+{
+    return m_shortMessage;
+}
+
+const volatile uint16_t TeensyDmx::getChecksumFail() const
+{
+    return m_checksumFail;
+}
+
+const volatile uint16_t TeensyDmx::getLengthMismatch() const
+{
+    return m_lengthMismatch;
 }
 
 void TeensyDmx::setMode(TeensyDmx::Mode mode)
@@ -177,9 +233,7 @@ void TeensyDmx::setMode(TeensyDmx::Mode mode)
             startTransmit();
             break;
         default:
-            if (m_redePin != nullptr) {
-                *m_redePin = 0;  // Off puts in receive state so as to be passive
-            }
+            setDirection(false); // Off puts in receive state so as to be passive
             break;
     }
 }
@@ -215,16 +269,17 @@ void TeensyDmx::nextTx()
 {
     if (m_state == State::BREAK) {
         m_state = DMX_TX;
+        // Send the NSC
         m_uart.begin(DMXSPEED, DMXFORMAT);
         m_uart.write(0);
+        m_dmxBufferIndex = 0;
     } else if (m_state == State::DMX_TX) {
         // Check if we're at the end of the packet
         if (m_dmxBufferIndex == DMX_BUFFER_SIZE) {
-            // Send BREAK
             m_state = State::BREAK;
+            // Send BREAK
             m_uart.begin(BREAKSPEED, BREAKFORMAT);
             m_uart.write(0);
-            m_dmxBufferIndex = 0;
         } else {
             m_uart.write(m_activeBuffer[m_dmxBufferIndex]);
             ++m_dmxBufferIndex;
@@ -235,7 +290,7 @@ void TeensyDmx::nextTx()
 void uart0_status_isr();  // Back reference to serial1.c
 void UART0TxStatus()
 {
-    if ((UART0_C2 & UART_C2_TCIE) && (UART0_S1 & UART_S1_TC)) {
+    if ((UART0_S1 & UART_S1_TC)) {
         // TX complete
         uartInstances[0]->nextTx();
     }
@@ -246,7 +301,7 @@ void UART0TxStatus()
 void uart1_status_isr();  // Back reference to serial2.c
 void UART1TxStatus()
 {
-    if ((UART1_C2 & UART_C2_TCIE) && (UART1_S1 & UART_S1_TC)) {
+    if ((UART1_S1 & UART_S1_TC)) {
         // TX complete
         uartInstances[1]->nextTx();
     }
@@ -257,7 +312,7 @@ void UART1TxStatus()
 void uart2_status_isr();  // Back reference to serial3.c
 void UART2TxStatus()
 {
-    if ((UART2_C2 & UART_C2_TCIE) && (UART2_S1 & UART_S1_TC)) {
+    if ((UART2_S1 & UART_S1_TC)) {
         // TX complete
         uartInstances[2]->nextTx();
     }
@@ -269,7 +324,7 @@ void UART2TxStatus()
 void uart3_status_isr();  // Back reference to serial4.c
 void UART3TxStatus()
 {
-    if ((UART3_C2 & UART_C2_TCIE) && (UART3_S1 & UART_S1_TC)) {
+    if ((UART3_S1 & UART_S1_TC)) {
         // TX complete
         uartInstances[3]->nextTx();
     }
@@ -282,7 +337,7 @@ void UART3TxStatus()
 void uart4_status_isr();  // Back reference to serial5.c
 void UART4TxStatus()
 {
-    if ((UART4_C2 & UART_C2_TCIE) && (UART4_S1 & UART_S1_TC)) {
+    if ((UART4_S1 & UART_S1_TC)) {
         // TX complete
         uartInstances[4]->nextTx();
     }
@@ -295,7 +350,7 @@ void UART4TxStatus()
 void uart5_status_isr();  // Back reference to serial6.c
 void UART5TxStatus()
 {
-    if ((UART5_C2 & UART_C2_TCIE) && (UART5_S1 & UART_S1_TC)) {
+    if ((UART5_S1 & UART_S1_TC)) {
         // TX complete
         uartInstances[5]->nextTx();
     }
@@ -306,9 +361,7 @@ void UART5TxStatus()
 
 void TeensyDmx::startTransmit()
 {
-    if (m_redePin != nullptr) {
-        *m_redePin = 1;
-    }
+    setDirection(true);
 
     m_dmxBufferIndex = 0;
 
@@ -378,28 +431,20 @@ void TeensyDmx::stopTransmit()
 
 bool TeensyDmx::newFrame(void)
 {
-    if (m_newFrame) {
-        m_newFrame = false;
-        return true;
-    }
-    return false;
+    bool newFrame = m_newFrame;
+    m_newFrame = false;
+    return newFrame;
 }
 
 bool TeensyDmx::rdmChanged(void)
 {
-    if (m_rdmChange) {
-        m_rdmChange = false;
-        return true;
-    }
-    return false;
+    bool rdmChange = m_rdmChange;
+    m_rdmChange = false;
+    return rdmChange;
 }
 
 void TeensyDmx::completeFrame()
 {
-    // Ensure we've processed all the data that may still be sitting
-    // in software buffers.
-    readBytes();
-
     switch (m_state)
     {
         case State::DMX_RECV:
@@ -415,40 +460,51 @@ void TeensyDmx::completeFrame()
             }
             m_newFrame = true;
             break;
-        case State::RDM_COMPLETE:
-            // Check if we need to reply to this RDM message
-            m_state = State::IDLE; // Stop the ISR messing up things
-            processRDM();
-            break;
         case State::RDM_RECV:
         case State::RDM_RECV_CHECKSUM_HI:
-        case State::RDM_RECV_CHECKSUM_LO:
-            // Partial RDM packet then break
-            m_state = State::IDLE; // Give up and start over
-            break;
+            // Double check the previous partial message was an RDM one
+            if ((m_mode == DMX_IN) &&
+                (m_rdmBuffer.subStartCode == E120_SC_SUB_MESSAGE)) {
+                if (m_dmxBufferIndex < 9) {
+                    // Destination UID needs 8, but we post increment, hence 9
+                    maybeIncrementShortMessage();
+                } else if (m_dmxBufferIndex < (m_rdmBuffer.length + 3)) {
+                    // Expected length plus checksum, but we post increment, hence 3
+                    maybeIncrementLengthMismatch();
+                }
+            }
+            // Fall through
         default:
-            // Unknown, ASC? frame
+            // Unknown, ASC? frame or was RDM packet
             break;
     }
-    m_dmxBufferIndex = 0;
     m_state = State::BREAK;
 }
 
-void TeensyDmx::rdmDiscUniqueBranch(struct RDMDATA* rdm)
+void TeensyDmx::rdmDiscUniqueBranch()
 {
-    if (m_rdmMute) return;
+    if (m_rdm == nullptr || m_rdmMute) {
+        return;
+    }
 
-    if (rdm->Length != (RDM_PACKET_SIZE_NO_PD + sizeof(DISC_UNIQUE_BRANCH_REQUEST))) return;
-    if (rdm->DataLength != sizeof(DISC_UNIQUE_BRANCH_REQUEST)) return;
+    if (m_rdmBuffer.length != (RDM_PACKET_SIZE_NO_PD + sizeof(DiscUniqueBranchRequest))) {
+        return;
+    }
 
-    DISC_UNIQUE_BRANCH_REQUEST *dub_request = (DISC_UNIQUE_BRANCH_REQUEST *)(rdm->Data);
+    if (m_rdmBuffer.dataLength != sizeof(DiscUniqueBranchRequest)) {
+        return;
+    }
 
-    if (memcmp(dub_request->lowerBoundUID, _devID, sizeof(_devID)) <= 0 &&
-            memcmp(_devID, dub_request->upperBoundUID, sizeof(_devID)) <= 0) {
+    DiscUniqueBranchRequest *dub_request =
+        reinterpret_cast<DiscUniqueBranchRequest*>(m_rdmBuffer.data);
+
+    if (memcmp(dub_request->lowerBoundUID, m_rdm->uid, RDM_UID_LENGTH) <= 0 &&
+            memcmp(m_rdm->uid, dub_request->upperBoundUID, RDM_UID_LENGTH) <= 0) {
         // I'm in range - say hello to the lovely controller
 
         // respond with the special discovery message !
-        struct DISC_UNIQUE_BRANCH_RESPONSE *dub_response = (struct DISC_UNIQUE_BRANCH_RESPONSE*)(&m_rdmBuffer.discovery);
+        DiscUniqueBranchResponse *dub_response =
+            reinterpret_cast<DiscUniqueBranchResponse*>(&m_rdmBuffer);
 
         // fill in the discovery response structure
         for (byte i = 0; i < 7; ++i) {
@@ -456,11 +512,13 @@ void TeensyDmx::rdmDiscUniqueBranch(struct RDMDATA* rdm)
         }
         dub_response->headerAA = 0xAA;
         for (byte i = 0; i < 6; ++i) {
-            dub_response->maskedDevID[i+i]   = _devID[i] | 0xAA;
-            dub_response->maskedDevID[i+i+1] = _devID[i] | 0x55;
+            dub_response->maskedDevID[i+i]   = m_rdm->uid[i] | 0xAA;
+            dub_response->maskedDevID[i+i+1] = m_rdm->uid[i] | 0x55;
         }
 
-        uint16_t checksum = rdmCalculateChecksum(dub_response->maskedDevID, sizeof(dub_response->maskedDevID));
+        uint16_t checksum =
+            rdmCalculateChecksum(dub_response->maskedDevID,
+                                 sizeof(dub_response->maskedDevID));
 
         dub_response->checksum[0] = (checksum >> 8)   | 0xAA;
         dub_response->checksum[1] = (checksum >> 8)   | 0x55;
@@ -469,258 +527,289 @@ void TeensyDmx::rdmDiscUniqueBranch(struct RDMDATA* rdm)
 
         // Send reply
         stopReceive();
-        if (m_redePin != nullptr) {
-            *m_redePin = 1;
-        }
-        m_dmxBufferIndex = 0;
+        setDirection(true);
         // No break for DUB
         m_uart.begin(DMXSPEED, DMXFORMAT);
-        for (uint16_t i = 0; i < sizeof(DISC_UNIQUE_BRANCH_RESPONSE); ++i) {
-            m_uart.write(m_rdmBuffer.buffer[i]);
-            m_uart.flush();
-        }
+        m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer), sizeof(DiscUniqueBranchResponse));
+        m_uart.flush();
         startReceive();
     }
 }
 
-uint16_t TeensyDmx::rdmDiscUnMute(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmDiscUnMute()
 {
-    if (rdm->DataLength == 0) {
-        m_rdmMute = false;
-        // Control field
-        rdm->Data[0] = 0;
-        rdm->Data[1] = 0;
-        rdm->DataLength = 2;
-        return NACK_WAS_ACK;
-    } else {
+    if (m_rdmBuffer.dataLength != 0) {
         return E120_NR_FORMAT_ERROR;
     }
+    m_rdmMute = false;
+    // Control field
+    m_rdmBuffer.data[0] = 0;
+    m_rdmBuffer.data[1] = 0;
+    m_rdmBuffer.dataLength = 2;
+    return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmDiscMute(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmDiscMute()
 {
-    if (rdm->DataLength == 0) {
-        m_rdmMute = true;
-        // Control field
-        rdm->Data[0] = 0;
-        rdm->Data[1] = 0;
-        rdm->DataLength = 2;
-        return NACK_WAS_ACK;
-    } else {
+    if (m_rdmBuffer.dataLength != 0) {
         return E120_NR_FORMAT_ERROR;
     }
+    m_rdmMute = true;
+    // Control field
+    m_rdmBuffer.data[0] = 0;
+    m_rdmBuffer.data[1] = 0;
+    m_rdmBuffer.dataLength = 2;
+    return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmSetIdentifyDevice(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmSetIdentifyDevice()
 {
-    if (rdm->DataLength != 1) {
+    if (m_rdmBuffer.dataLength != 1) {
         // Oversized data
         return E120_NR_FORMAT_ERROR;
-    } else if ((rdm->Data[0] != 0) && (rdm->Data[0] != 1)) {
+    }
+    if ((m_rdmBuffer.data[0] != 0) && (m_rdmBuffer.data[0] != 1)) {
         // Out of range data
         return E120_NR_DATA_OUT_OF_RANGE;
-    } else {
-        m_identifyMode = rdm->Data[0] != 0;
-        m_rdmChange = true;
-        rdm->DataLength = 0;
-        return NACK_WAS_ACK;
     }
+    m_identifyMode = m_rdmBuffer.data[0] != 0;
+    m_rdmChange = true;
+    m_rdmBuffer.dataLength = 0;
+    return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmSetDeviceLabel(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmSetCommsStatus()
 {
-    if (rdm->DataLength > sizeof(m_deviceLabel)) {
+    if (m_rdmBuffer.dataLength != 0) {
         // Oversized data
         return E120_NR_FORMAT_ERROR;
-    } else {
-        memcpy(m_deviceLabel, rdm->Data, rdm->DataLength);
-        m_deviceLabel[rdm->DataLength] = '\0';
-        rdm->DataLength = 0;
-        m_rdmChange = true;
-        return NACK_WAS_ACK;
     }
+    m_shortMessage = 0;
+    m_lengthMismatch = 0;
+    m_checksumFail = 0;
+    m_rdmChange = true;
+    m_rdmBuffer.dataLength = 0;
+    return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmSetDMXStartAddress(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmSetDeviceLabel()
 {
-    if (rdm->DataLength != 2) {
+    if (m_rdmBuffer.dataLength > RDM_MAX_STRING_LENGTH) {
         // Oversized data
         return E120_NR_FORMAT_ERROR;
-    } else {
-        uint16_t newStartAddress = READINT(rdm->Data);
-        if ((newStartAddress <= 0) || (newStartAddress > DMX_BUFFER_SIZE)) {
-            // Out of range start address
-            return E120_NR_DATA_OUT_OF_RANGE;
-        } else if (m_rdm == nullptr) {
-            return E120_NR_HARDWARE_FAULT;
-        } else {
-            m_rdm->startAddress = newStartAddress;
-            rdm->DataLength = 0;
-            m_rdmChange = true;
-            return NACK_WAS_ACK;
-        }
     }
+    memcpy(m_deviceLabel, m_rdmBuffer.data, m_rdmBuffer.dataLength);
+    m_deviceLabel[m_rdmBuffer.dataLength] = '\0';
+    m_rdmBuffer.dataLength = 0;
+    m_rdmChange = true;
+    return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmGetIdentifyDevice(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmSetDMXStartAddress()
 {
-    if (rdm->DataLength > 0) {
+    if (m_rdmBuffer.dataLength != 2) {
+        // Oversized data
+        return E120_NR_FORMAT_ERROR;
+    }
+    uint16_t newStartAddress = getUInt16(m_rdmBuffer.data);
+    if ((newStartAddress <= 0) || (newStartAddress > DMX_BUFFER_SIZE)) {
+        // Out of range start address
+        return E120_NR_DATA_OUT_OF_RANGE;
+    }
+    if (m_rdm == nullptr) {
+        return E120_NR_HARDWARE_FAULT;
+    }
+    m_rdm->startAddress = newStartAddress;
+    m_rdmBuffer.dataLength = 0;
+    m_rdmChange = true;
+    return NACK_WAS_ACK;
+}
+
+uint16_t TeensyDmx::rdmGetCommsStatus()
+{
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm->SubDev != 0) {
+    }
+    if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
-    } else {
-        rdm->Data[0] = m_identifyMode;
-        rdm->DataLength = 1;
-        return NACK_WAS_ACK;
     }
+    // return all comms status data
+    // The data to be responded has to be in the Data buffer.
+    CommsStatusGetResponse *commsStatus =
+        reinterpret_cast<CommsStatusGetResponse*>(m_rdmBuffer.data);
+
+    putUInt16(&commsStatus->shortMessage, m_shortMessage);
+    putUInt16(&commsStatus->lengthMismatch, m_lengthMismatch);
+    putUInt16(&commsStatus->checksumFail, m_checksumFail);
+    m_rdmBuffer.dataLength = sizeof(CommsStatusGetResponse);
+    return NACK_WAS_ACK;
 }
 
-uint16_t TeensyDmx::rdmGetDeviceInfo(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmGetIdentifyDevice()
 {
-    if (rdm->DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm->SubDev != 0) {
+    }
+    if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
+        // No sub-devices supported
+        return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
+    }
+    m_rdmBuffer.data[0] = m_identifyMode;
+    m_rdmBuffer.dataLength = 1;
+    return NACK_WAS_ACK;
+}
+
+uint16_t TeensyDmx::rdmGetDeviceInfo()
+{
+    if (m_rdmBuffer.dataLength > 0) {
+        // Unexpected data
+        return E120_NR_FORMAT_ERROR;
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
         // return all device info data
-        // The data has to be responsed in the Data buffer.
-        DEVICE_INFO_GET_RESPONSE *devInfo = (DEVICE_INFO_GET_RESPONSE *)(rdm->Data);
+        // The data to be responded has to be in the Data buffer.
+        DeviceInfoGetResponse *devInfo =
+            reinterpret_cast<DeviceInfoGetResponse*>(m_rdmBuffer.data);
 
         devInfo->protocolMajor = 1;
         devInfo->protocolMinor = 0;
-        putInt(&devInfo->productCategory, 0, E120_PRODUCT_CATEGORY_DIMMER_CS_LED);
-        devInfo->softwareVersion = 0x00000010;  // Endian swapped
         devInfo->currentPersonality = 1;
         devInfo->personalityCount = 1;
         devInfo->subDeviceCount = 0;
         devInfo->sensorCount = 0;
         if (m_rdm == nullptr) {
             devInfo->deviceModel = 0;
+            putUInt16(&devInfo->productCategory, E120_PRODUCT_CATEGORY_NOT_DECLARED);
+            devInfo->softwareVersion = 0;
             devInfo->startAddress = 0;
             devInfo->footprint = 0;
         } else {
-            putInt(&devInfo->deviceModel, 0, m_rdm->deviceModelId);
-            putInt(&devInfo->startAddress, 0, m_rdm->startAddress);
-            putInt(&devInfo->footprint, 0, m_rdm->footprint);
+            putUInt16(&devInfo->deviceModel, m_rdm->deviceModelId);
+            putUInt16(&devInfo->productCategory, m_rdm->productCategory);
+            putUInt32(&devInfo->softwareVersion, m_rdm->softwareVersionId);
+            putUInt16(&devInfo->startAddress, m_rdm->startAddress);
+            putUInt16(&devInfo->footprint, m_rdm->footprint);
         }
 
-        rdm->DataLength = sizeof(DEVICE_INFO_GET_RESPONSE);
+        m_rdmBuffer.dataLength = sizeof(DeviceInfoGetResponse);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetManufacturerLabel(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmGetManufacturerLabel()
 {
-    if (rdm->DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm->SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else if (m_rdm == nullptr) {
         return E120_NR_HARDWARE_FAULT;
     } else {
         // return the manufacturer label
-        rdm->DataLength = strlen(m_rdm->manufacturerLabel);
-        memcpy(rdm->Data, m_rdm->manufacturerLabel, rdm->DataLength);
+        m_rdmBuffer.dataLength = strnlen(m_rdm->manufacturerLabel, RDM_MAX_STRING_LENGTH);
+        memcpy(m_rdmBuffer.data, m_rdm->manufacturerLabel, m_rdmBuffer.dataLength);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetDeviceModelDescription(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmGetDeviceModelDescription()
 {
-    if (rdm->DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm->SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else if (m_rdm == nullptr) {
         return E120_NR_HARDWARE_FAULT;
     } else {
         // return the DEVICE MODEL DESCRIPTION
-        rdm->DataLength = strlen(m_rdm->deviceModel);
-        memcpy(rdm->Data, m_rdm->deviceModel, rdm->DataLength);
+        m_rdmBuffer.dataLength = strnlen(m_rdm->deviceModel, RDM_MAX_STRING_LENGTH);
+        memcpy(m_rdmBuffer.data, m_rdm->deviceModel, m_rdmBuffer.dataLength);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetDeviceLabel(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmGetDeviceLabel()
 {
-    if (rdm->DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm->SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
-        rdm->DataLength = strlen(m_deviceLabel);
-        memcpy(rdm->Data, m_deviceLabel, rdm->DataLength);
+        m_rdmBuffer.dataLength = strnlen(m_deviceLabel, RDM_MAX_STRING_LENGTH);
+        memcpy(m_rdmBuffer.data, m_deviceLabel, m_rdmBuffer.dataLength);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetSoftwareVersionLabel(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmGetSoftwareVersionLabel()
 {
-    if (rdm->DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm->SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else if (m_rdm == nullptr) {
         return E120_NR_HARDWARE_FAULT;
     } else {
         // return the SOFTWARE_VERSION_LABEL
-        rdm->DataLength = strlen(m_rdm->softwareLabel);
-        memcpy(rdm->Data, m_rdm->softwareLabel, rdm->DataLength);
+        m_rdmBuffer.dataLength = strnlen(m_rdm->softwareLabel, RDM_MAX_STRING_LENGTH);
+        memcpy(m_rdmBuffer.data, m_rdm->softwareLabel, m_rdmBuffer.dataLength);
         return NACK_WAS_ACK;
     }
 }
 
-uint16_t TeensyDmx::rdmGetDMXStartAddress(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmGetDMXStartAddress()
 {
-   if (rdm->DataLength > 0) {
+   if (m_rdmBuffer.dataLength > 0) {
        // Unexpected data
        return E120_NR_FORMAT_ERROR;
-   } else if (rdm->SubDev != 0) {
+   } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
        // No sub-devices supported
        return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
    } else {
        if (m_rdm == nullptr) {
-           putInt(rdm->Data, 0, 0);
+           putUInt16(m_rdmBuffer.data, 0);
        } else {
-           putInt(rdm->Data, 0, m_rdm->startAddress);
+           putUInt16(m_rdmBuffer.data, m_rdm->startAddress);
        }
-       rdm->DataLength = sizeof(m_rdm->startAddress);
+       m_rdmBuffer.dataLength = sizeof(m_rdm->startAddress);
        return NACK_WAS_ACK;
    }
 }
 
-uint16_t TeensyDmx::rdmGetSupportedParameters(struct RDMDATA* rdm)
+uint16_t TeensyDmx::rdmGetSupportedParameters()
 {
-    if (rdm->DataLength > 0) {
+    if (m_rdmBuffer.dataLength > 0) {
         // Unexpected data
         return E120_NR_FORMAT_ERROR;
-    } else if (rdm->SubDev != 0) {
+    } else if (m_rdmBuffer.subDev != RDM_ROOT_DEVICE) {
         // No sub-devices supported
         return E120_NR_SUB_DEVICE_OUT_OF_RANGE;
     } else {
-        if (m_rdm == nullptr) {
-            rdm->DataLength = 6;
-        } else {
-            rdm->DataLength = 2 * (3 + m_rdm->additionalCommandsLength);
+        m_rdmBuffer.dataLength = 8;
+        putUInt16(&m_rdmBuffer.data[0], E120_MANUFACTURER_LABEL);
+        putUInt16(&m_rdmBuffer.data[2], E120_DEVICE_MODEL_DESCRIPTION);
+        putUInt16(&m_rdmBuffer.data[4], E120_DEVICE_LABEL);
+        putUInt16(&m_rdmBuffer.data[6], E120_COMMS_STATUS);
+        if (m_rdm != nullptr) {
             for (int n = 0; n < m_rdm->additionalCommandsLength; ++n) {
-                putInt(rdm->Data, 6+n+n, m_rdm->additionalCommands[n]);
+                putUInt16(&m_rdmBuffer.data[m_rdmBuffer.dataLength],
+                          m_rdm->additionalCommands[n]);
+                m_rdmBuffer.dataLength += 2;
             }
         }
-        putInt(rdm->Data, 0, E120_MANUFACTURER_LABEL);
-        putInt(rdm->Data, 2, E120_DEVICE_MODEL_DESCRIPTION);
-        putInt(rdm->Data, 4, E120_DEVICE_LABEL);
         return NACK_WAS_ACK;
     }
 }
@@ -738,33 +827,97 @@ uint16_t TeensyDmx::rdmCalculateChecksum(uint8_t* data, uint8_t length)
     return checksum;
 }
 
+bool TeensyDmx::isForMe(const byte* id)
+{
+    return (memcmp(id, m_rdm->uid, RDM_UID_LENGTH) == 0);
+}
+
+bool TeensyDmx::isForVendor(const byte* id)
+{
+    if (id[0] != m_rdm->uid[0] || id[1] != m_rdm->uid[1])
+    {
+        return false;
+    }
+    for (int i = 2; i < RDM_UID_LENGTH; ++i)
+    {
+        if (id[i] != 0xff) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool TeensyDmx::isForAll(const byte* id)
+{
+    for (int i = 0; i < RDM_UID_LENGTH; ++i) {
+        if (*id != 0xff) {
+            return false;
+        }
+        ++id;
+    }
+    return true;
+}
+
+void TeensyDmx::maybeIncrementShortMessage()
+{
+    // RDM message and not complete destination UID
+    // We only call this when we get a message without a destination UID
+    // Ensure we don't overflow
+    if (m_shortMessage < std::numeric_limits<uint16_t>::max()) {
+        ++m_shortMessage;
+    }
+}
+
+void TeensyDmx::maybeIncrementLengthMismatch()
+{
+    // RDM message for me, vendorcast or broadcast where length didn't match message length plus checksum, either too long or too short
+    // We only call this when we get a message with an invalid length
+    if (isForMe(m_rdmBuffer.destId) || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
+        // Ensure we don't overflow
+        if (m_lengthMismatch < std::numeric_limits<uint16_t>::max()) {
+            ++m_lengthMismatch;
+        }
+    }
+}
+
+void TeensyDmx::maybeIncrementChecksumFail()
+{
+    // RDM message for me, vendorcast or broadcast where checksum was incorrect
+    // We only call this when we get an invalid checksum
+    if (isForMe(m_rdmBuffer.destId) || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
+          // Ensure we don't overflow
+          if (m_checksumFail < std::numeric_limits<uint16_t>::max()) {
+              ++m_checksumFail;
+          }
+    }
+}
+
 void TeensyDmx::processRDM()
 {
+    if (m_rdm == nullptr) {
+        return;
+    }
+
     uint16_t nackReason = E120_NR_UNKNOWN_PID;
 
     m_state = IDLE;
     unsigned long timingStart = micros();
-    struct RDMDATA* rdm = (struct RDMDATA*)(&m_rdmBuffer.packet);
 
-    bool isForMe = (memcmp(rdm->DestID, _devID, sizeof(_devID)) == 0);
-    if (isForMe ||
-            memcmp(rdm->DestID, _devIDAll, sizeof(_devIDAll)) == 0 ||
-            memcmp(rdm->DestID, _devIDGroup, sizeof(_devIDGroup)) == 0) {
-
+    bool forMe = isForMe(m_rdmBuffer.destId);
+    if (forMe || isForAll(m_rdmBuffer.destId) || isForVendor(m_rdmBuffer.destId)) {
         bool sendResponse = true;
-
-        uint16_t parameter = SWAPINT(rdm->Parameter);
-        if (rdm->CmdClass == E120_DISCOVERY_COMMAND) {
+        uint16_t parameter = swapUInt16(m_rdmBuffer.parameter);
+        if (m_rdmBuffer.cmdClass == E120_DISCOVERY_COMMAND) {
             switch (parameter) {
                 case E120_DISC_UNIQUE_BRANCH:
-                    rdmDiscUniqueBranch(rdm);
+                    rdmDiscUniqueBranch();
                     sendResponse = false;  // DUB is special
                     break;
                 case E120_DISC_UN_MUTE:
-                    nackReason = rdmDiscUnMute(rdm);
+                    nackReason = rdmDiscUnMute();
                     break;
                 case E120_DISC_MUTE:
-                    nackReason = rdmDiscMute(rdm);
+                    nackReason = rdmDiscMute();
                     break;
                 default:
                     // Don't respond, unknown DISCOVERY PID
@@ -772,132 +925,119 @@ void TeensyDmx::processRDM()
                     break;
             }
             if (nackReason != NACK_WAS_ACK) {
-                    // Only send ACKs for DISCOVERY, don't NACK
-                    sendResponse = false;
+                // Only send ACKs for DISCOVERY, don't NACK
+                sendResponse = false;
+            }
+        } else if (m_rdmBuffer.cmdClass == E120_GET_COMMAND) {
+            switch (parameter) {
+                case E120_IDENTIFY_DEVICE:
+                    nackReason = rdmGetIdentifyDevice();
+                    break;
+                case E120_DEVICE_LABEL:
+                    nackReason = rdmGetDeviceLabel();
+                    break;
+                case E120_DMX_START_ADDRESS:
+                    nackReason = rdmGetDMXStartAddress();
+                    break;
+                case E120_SUPPORTED_PARAMETERS:
+                    nackReason = rdmGetSupportedParameters();
+                    break;
+                case E120_DEVICE_INFO:
+                    nackReason = rdmGetDeviceInfo();
+                    break;
+                case E120_MANUFACTURER_LABEL:
+                    nackReason = rdmGetManufacturerLabel();
+                    break;
+                case E120_DEVICE_MODEL_DESCRIPTION:
+                    nackReason = rdmGetDeviceModelDescription();
+                    break;
+                case E120_SOFTWARE_VERSION_LABEL:
+                    nackReason = rdmGetSoftwareVersionLabel();
+                    break;
+                case E120_COMMS_STATUS:
+                    nackReason = rdmGetCommsStatus();
+                    break;
+                default:
+                    nackReason = E120_NR_UNKNOWN_PID;
+                    break;
+            }
+        } else if (m_rdmBuffer.cmdClass == E120_SET_COMMAND) {
+            switch (parameter) {
+                case E120_IDENTIFY_DEVICE:
+                    nackReason = rdmSetIdentifyDevice();
+                    break;
+                case E120_DEVICE_LABEL:
+                    nackReason = rdmSetDeviceLabel();
+                    break;
+                case E120_DMX_START_ADDRESS:
+                    nackReason = rdmSetDMXStartAddress();
+                    break;
+                case E120_COMMS_STATUS:
+                    nackReason = rdmSetCommsStatus();
+                    break;
+                case E120_SUPPORTED_PARAMETERS:
+                case E120_DEVICE_INFO:
+                case E120_MANUFACTURER_LABEL:
+                case E120_DEVICE_MODEL_DESCRIPTION:
+                case E120_SOFTWARE_VERSION_LABEL:
+                    nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
+                    break;
+                default:
+                    nackReason = E120_NR_UNKNOWN_PID;
+                    break;
             }
         } else {
-            if ((rdm->CmdClass == E120_GET_COMMAND) || (rdm->CmdClass == E120_SET_COMMAND)) {
-                switch (parameter) {
-                    case E120_IDENTIFY_DEVICE:
-                        if (rdm->CmdClass == E120_SET_COMMAND) {
-                            nackReason = rdmSetIdentifyDevice(rdm);
-                        } else {
-                            nackReason = rdmGetIdentifyDevice(rdm);
-                        }
-                        break;
-                    case E120_DEVICE_LABEL:
-                        if (rdm->CmdClass == E120_SET_COMMAND) {
-                            nackReason = rdmSetDeviceLabel(rdm);
-                        } else {
-                            nackReason = rdmGetDeviceLabel(rdm);
-                        }
-                        break;
-                    case E120_DMX_START_ADDRESS:
-                        if (rdm->CmdClass == E120_SET_COMMAND) {
-                            nackReason = rdmSetDMXStartAddress(rdm);
-                        } else {
-                            nackReason = rdmGetDMXStartAddress(rdm);
-                        }
-                        break;
-                    case E120_SUPPORTED_PARAMETERS:
-                        if (rdm->CmdClass == E120_SET_COMMAND) {
-                            nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                        } else {
-                            nackReason = rdmGetSupportedParameters(rdm);
-                        }
-                        break;
-                    case E120_DEVICE_INFO:
-                        if (rdm->CmdClass == E120_SET_COMMAND) {
-                            nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                        } else {
-                            nackReason = rdmGetDeviceInfo(rdm);
-                        }
-                        break;
-                    case E120_MANUFACTURER_LABEL:
-                        if (rdm->CmdClass == E120_SET_COMMAND) {
-                            nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                        } else {
-                            nackReason = rdmGetManufacturerLabel(rdm);
-                        }
-                        break;
-                    case E120_DEVICE_MODEL_DESCRIPTION:
-                        if (rdm->CmdClass == E120_SET_COMMAND) {
-                            nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                        } else {
-                            nackReason = rdmGetDeviceModelDescription(rdm);
-                        }
-                        break;
-                    case E120_SOFTWARE_VERSION_LABEL:
-                        if (rdm->CmdClass == E120_SET_COMMAND) {
-                            nackReason = E120_NR_UNSUPPORTED_COMMAND_CLASS;
-                        } else {
-                            nackReason = rdmGetSoftwareVersionLabel(rdm);
-                        }
-                        break;
-                    default:
-                        nackReason = E120_NR_UNKNOWN_PID;
-                        break;
-                }
-            } else {
-                // Unknown command class
-                nackReason = E120_NR_FORMAT_ERROR;
+            // Unknown command class
+            nackReason = E120_NR_FORMAT_ERROR;
+        }
+        if (forMe && sendResponse) {
+            // TIMING: don't send too fast, min: 176 microseconds
+            timingStart = micros() - timingStart;
+            if (timingStart < 176) {
+                delayMicroseconds(176 - timingStart);
             }
+            respondMessage(nackReason);
         }
-        if (isForMe && sendResponse) {
-           respondMessage(timingStart, nackReason);
-        }
-    } else {
-        // Not for me
     }
 }
 
-void TeensyDmx::respondMessage(unsigned long timingStart, uint16_t nackReason)
+void TeensyDmx::respondMessage(uint16_t nackReason)
 {
-
-    struct RDMDATA* rdm = (struct RDMDATA*)(&m_rdmBuffer.packet);
-
-    // TIMING: don't send too fast, min: 176 microseconds
-    timingStart = micros() - timingStart;
-    if (timingStart < 176) {
-        delayMicroseconds(176 - timingStart);
+    // swap SrcID into DestID for sending back.
+    memcpy(m_rdmBuffer.destId, m_rdmBuffer.sourceId, RDM_UID_LENGTH);
+    if (m_rdm != nullptr) {
+        memcpy(m_rdmBuffer.sourceId, m_rdm->uid, RDM_UID_LENGTH);
+    } else {
+        nackReason = E120_NR_HARDWARE_FAULT;
     }
 
     // no need to set these data fields:
     // StartCode, SubStartCode
-    rdm->MessageCount = 0; // Number of queued messages
+    m_rdmBuffer.messageCount = 0;  // Number of queued messages
     if (nackReason == NACK_WAS_ACK) {
-        rdm->ResponseType = E120_RESPONSE_TYPE_ACK;
+        m_rdmBuffer.responseType = E120_RESPONSE_TYPE_ACK;
     } else {
-        rdm->ResponseType = E120_RESPONSE_TYPE_NACK_REASON;
-        rdm->DataLength = 2;
-        putInt(&rdm->Data, 0, nackReason);
+        m_rdmBuffer.responseType = E120_RESPONSE_TYPE_NACK_REASON;
+        m_rdmBuffer.dataLength = 2;
+        putUInt16(&m_rdmBuffer.data, nackReason);
     }
-    rdm->Length = rdm->DataLength + 24; // total packet length
+    m_rdmBuffer.length = m_rdmBuffer.dataLength + RDM_PACKET_SIZE_NO_PD;  // total packet length
 
-    // swap SrcID into DestID for sending back.
-    memcpy(rdm->DestID, rdm->SourceID, sizeof(rdm->SourceID));
-    memcpy(rdm->SourceID, _devID, sizeof(_devID));
+    ++m_rdmBuffer.cmdClass;
 
-    ++(rdm->CmdClass);
-    // Parameter
-
-    uint16_t checkSum = rdmCalculateChecksum(m_rdmBuffer.buffer, rdm->Length);
+    uint16_t checkSum = rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
+                                             m_rdmBuffer.length);
 
     // Send reply
     stopReceive();
-    if (m_redePin != nullptr) {
-        *m_redePin = 1;
-    }
-    m_dmxBufferIndex = 0;
+    setDirection(true);
 
     m_uart.begin(RDM_BREAKSPEED, BREAKFORMAT);
     m_uart.write(0);
     m_uart.flush();
     m_uart.begin(DMXSPEED, DMXFORMAT);
-    for (uint16_t i = 0; i < rdm->Length; ++i) {
-        m_uart.write(m_rdmBuffer.buffer[i]);
-        m_uart.flush();
-    }
+    m_uart.write(reinterpret_cast<uint8_t*>(&m_rdmBuffer), m_rdmBuffer.length);
+    m_uart.flush();
     m_uart.write(checkSum >> 8);
     m_uart.flush();
     m_uart.write(checkSum & 0xff);
@@ -916,8 +1056,9 @@ void UART0RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART0_S1 & UART_S1_FE)
+    if (UART0_S1 & UART_S1_FE) {
         (void) UART0_D;
+    }
 
     uartInstances[0]->completeFrame();
 }
@@ -931,8 +1072,9 @@ void UART1RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART1_S1 & UART_S1_FE)
+    if (UART1_S1 & UART_S1_FE) {
         (void) UART1_D;
+    }
 
     uartInstances[1]->completeFrame();
 }
@@ -946,8 +1088,9 @@ void UART2RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART2_S1 & UART_S1_FE)
+    if (UART2_S1 & UART_S1_FE) {
         (void) UART2_D;
+    }
 
     uartInstances[2]->completeFrame();
 }
@@ -962,8 +1105,9 @@ void UART3RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART3_S1 & UART_S1_FE)
+    if (UART3_S1 & UART_S1_FE) {
         (void) UART3_D;
+    }
 
     uartInstances[3]->completeFrame();
 }
@@ -979,8 +1123,9 @@ void UART4RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART4_S1 & UART_S1_FE)
+    if (UART4_S1 & UART_S1_FE) {
         (void) UART4_D;
+    }
 
     uartInstances[4]->completeFrame();
 }
@@ -996,104 +1141,244 @@ void UART5RxError(void)
     // fired and read the data buffer, clearing the framing error.
     // If for some reason it hasn't, make sure we consume the 0x00
     // byte that was received.
-    if (UART5_S1 & UART_S1_FE)
+    if (UART5_S1 & UART_S1_FE) {
         (void) UART5_D;
+    }
 
     uartInstances[5]->completeFrame();
 }
 #endif
 
-#ifndef IRQ_UART0_ERROR
 void UART0RxStatus()
 {
-    if (UART0_S1 & UART_S1_FE)
-    {
+    uint8_t s = UART0_S1;
+#ifdef HAS_KINETISK_UART0_FIFO
+	if (s & (UART_S1_RDRF | UART_S1_IDLE)) {
+		__disable_irq();
+		uint8_t avail = UART0_RCFIFO;
+		if (avail == 0) {
+			(void) UART0_D;
+			UART0_CFIFO = UART_CFIFO_RXFLUSH;
+			__enable_irq();
+		} else {
+			__enable_irq();
+			do {
+			    uartInstances[0]->handleByte(UART0_D);
+			} while (--avail);
+		}
+	}
+#else
+    if (s & UART_S1_FE) {
         (void) UART0_D;
-        uart0_status_isr();
         uartInstances[0]->completeFrame();
     }
-    else
-    {
-        uart0_status_isr();
+    else if (s & UART_S1_RDRF) {
+        uartInstances[0]->handleByte(UART0_D);
     }
+#endif
+    uart0_status_isr();
+    // Reset all flags on Teensy-LC
+#ifdef KINETISL
+    UART0_S1 = UART_S1_IDLE | UART_S1_OR | UART_S1_NF | UART_S1_FE | UART_S1_PF;
+#endif
 }
 
 void UART1RxStatus()
 {
-    if (UART1_S1 & UART_S1_FE)
-    {
+    uint8_t s = UART1_S1;
+#ifdef HAS_KINETISK_UART1_FIFO
+	if (s & (UART_S1_RDRF | UART_S1_IDLE)) {
+		__disable_irq();
+		uint8_t avail = UART1_RCFIFO;
+		if (avail == 0) {
+			(void) UART1_D;
+			UART1_CFIFO = UART_CFIFO_RXFLUSH;
+			__enable_irq();
+		} else {
+			__enable_irq();
+			do {
+			    uartInstances[1]->handleByte(UART1_D);
+			} while (--avail);
+		}
+	}
+#else
+    if (s & UART_S1_FE) {
         (void) UART1_D;
-        uart1_status_isr();
         uartInstances[1]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[1]->handleByte(UART1_D);
     }
-    else
-    {
-        uart1_status_isr();
-    }
+#endif
+    uart1_status_isr();
+    // Reset all flags on Teensy-LC
+#ifdef KINETISL
+    UART1_S1 = UART_S1_IDLE | UART_S1_OR | UART_S1_NF | UART_S1_FE | UART_S1_PF;
+#endif
 }
 
 void UART2RxStatus()
 {
-    if (UART2_S1 & UART_S1_FE)
-    {
+    uint8_t s = UART2_S1;
+#ifdef HAS_KINETISK_UART2_FIFO
+	if (s & (UART_S1_RDRF | UART_S1_IDLE)) {
+		__disable_irq();
+		uint8_t avail = UART2_RCFIFO;
+		if (avail == 0) {
+			(void) UART2_D;
+			UART2_CFIFO = UART_CFIFO_RXFLUSH;
+			__enable_irq();
+		} else {
+			__enable_irq();
+			do {
+			    uartInstances[2]->handleByte(UART2_D);
+			} while (--avail);
+		}
+	}
+#else
+    if (s & UART_S1_FE) {
         (void) UART2_D;
-        uart2_status_isr();
         uartInstances[2]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[2]->handleByte(UART2_D);
     }
-    else
-    {
-        uart2_status_isr();
-    }
+#endif
+    uart2_status_isr();
+    // Reset all flags on Teensy-LC
+#ifdef KINETISL
+    UART2_S1 = UART_S1_IDLE | UART_S1_OR | UART_S1_NF | UART_S1_FE | UART_S1_PF;
+#endif
 }
-#endif  // IRQ_UART0_ERROR
+
+#ifdef HAS_KINETISK_UART3
+void UART3RxStatus()
+{
+    uint8_t s = UART3_S1;
+#ifdef HAS_KINETISK_UART3_FIFO
+	if (s & (UART_S1_RDRF | UART_S1_IDLE)) {
+		__disable_irq();
+		uint8_t avail = UART3_RCFIFO;
+		if (avail == 0) {
+			(void) UART3_D;
+			UART3_CFIFO = UART_CFIFO_RXFLUSH;
+			__enable_irq();
+		} else {
+			__enable_irq();
+			do {
+			    uartInstances[3]->handleByte(UART3_D);
+			} while (--avail);
+		}
+	}
+#else
+    if (s & UART_S1_FE) {
+        (void) UART3_D;
+        uartInstances[3]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[3]->handleByte(UART3_D);
+    }
+#endif
+    uart3_status_isr();
+    // Reset all flags on Teensy-LC
+#ifdef KINETISL
+    UART3_S1 = UART_S1_IDLE | UART_S1_OR | UART_S1_NF | UART_S1_FE | UART_S1_PF;
+#endif
+}
+#endif
+
+#ifdef HAS_KINETISK_UART4
+void UART4RxStatus()
+{
+    uint8_t s = UART4_S1;
+#ifdef HAS_KINETISK_UART4_FIFO
+	if (s & (UART_S1_RDRF | UART_S1_IDLE)) {
+		__disable_irq();
+		uint8_t avail = UART4_RCFIFO;
+		if (avail == 0) {
+			(void) UART4_D;
+			UART4_CFIFO = UART_CFIFO_RXFLUSH;
+			__enable_irq();
+		} else {
+			__enable_irq();
+			do {
+			    uartInstances[4]->handleByte(UART4_D);
+			} while (--avail);
+		}
+	}
+#else
+    if (s & UART_S1_FE) {
+        (void) UART4_D;
+        uartInstances[4]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[4]->handleByte(UART4_D);
+    }
+#endif
+    uart4_status_isr();
+    // Reset all flags on Teensy-LC
+#ifdef KINETISL
+    UART4_S1 = UART_S1_IDLE | UART_S1_OR | UART_S1_NF | UART_S1_FE | UART_S1_PF;
+#endif
+}
+#endif
+
+#ifdef HAS_KINETISK_UART5
+void UART5RxStatus()
+{
+    uint8_t s = UART5_S1;
+#ifdef HAS_KINETISK_UART5_FIFO
+    if (s & (UART_S1_RDRF | UART_S1_IDLE)) {
+        __disable_irq();
+        uint8_t avail = UART5_RCFIFO;
+        if (avail == 0) {
+            (void) UART5_D;
+            UART5_CFIFO = UART_CFIFO_RXFLUSH;
+            __enable_irq();
+        } else {
+            __enable_irq();
+            do {
+                uartInstances[5]->handleByte(UART5_D);
+            } while (--avail);
+        }
+    }
+#else
+    if (s & UART_S1_FE) {
+        (void) UART5_D;
+        uartInstances[5]->completeFrame();
+    } else if (s & UART_S1_RDRF) {
+        uartInstances[5]->handleByte(UART5_D);
+    }
+#endif
+    uart5_status_isr();
+    // Reset all flags on Teensy-LC
+#ifdef KINETISL
+    UART5_S1 = UART_S1_IDLE | UART_S1_OR | UART_S1_NF | UART_S1_FE | UART_S1_PF;
+#endif
+}
+#endif
 
 void TeensyDmx::startReceive()
 {
-    if (m_redePin != nullptr) {
-        *m_redePin = 0;
-    }
+    setDirection(false);
 
     // UART Initialisation
     m_uart.begin(250000);
 
-#ifndef IRQ_UART0_ERROR
     if (&m_uart == &Serial1) {
         // Change interrupt vector to mine to monitor RX complete
         // Fire UART0 receive interrupt immediately after each byte received
+#ifdef HAS_KINETISK_UART0_FIFO
         UART0_RWFIFO = 1;
+#endif
 
         // Enable UART0 interrupt on frame error and enable IRQ
-        UART0_C3 |= UART_C3_FEIE;
+#ifdef HAS_KINETISK_UART0_FIFO
+        UART0_C3 |= UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE;
+#else
+        UART0_C3 |= UART_C3_FEIE | UART_C2_RIE;
+#endif
         NVIC_ENABLE_IRQ(IRQ_UART0_STATUS);
 
         attachInterruptVector(IRQ_UART0_STATUS, UART0RxStatus);
-    } else if (&m_uart == &Serial2) {
-        // Change interrupt vector to mine to monitor RX complete
-        // Fire UART1 receive interrupt immediately after each byte received
-        UART1_RWFIFO = 1;
 
-        // Enable UART0 interrupt on frame error and enable IRQ
-        UART1_C3 |= UART_C3_FEIE;
-        NVIC_ENABLE_IRQ(IRQ_UART1_STATUS);
-
-        attachInterruptVector(IRQ_UART1_STATUS, UART1RxStatus);
-    } else if (&m_uart == &Serial3) {
-        // Change interrupt vector to mine to monitor RX complete
-        // Fire UART2 receive interrupt immediately after each byte received
-        UART2_RWFIFO = 1;
-
-        // Enable UART2 interrupt on frame error and enable IRQ
-        UART2_C3 |= UART_C3_FEIE;
-        NVIC_ENABLE_IRQ(IRQ_UART2_STATUS);
-
-        attachInterruptVector(IRQ_UART2_STATUS, UART2RxStatus);
-    }
-    // TODO: Does this need to handle Serial4-6 here too?
-#else
-    if (&m_uart == &Serial1) {
-        // Fire UART0 receive interrupt immediately after each byte received
-        UART0_RWFIFO = 1;
-
+#ifdef HAS_KINETISK_UART0_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1101,57 +1386,93 @@ void TeensyDmx::startReceive()
                           NVIC_GET_PRIORITY(IRQ_UART0_STATUS) + 1);
 
         // Enable UART0 interrupt on frame error and enable IRQ
-        UART0_C3 |= UART_C3_FEIE;
         NVIC_ENABLE_IRQ(IRQ_UART0_ERROR);
-
         attachInterruptVector(IRQ_UART0_ERROR, UART0RxError);
+#endif
     } else if (&m_uart == &Serial2) {
+        // Change interrupt vector to mine to monitor RX complete
         // Fire UART1 receive interrupt immediately after each byte received
+#ifdef HAS_KINETISK_UART1_FIFO
         UART1_RWFIFO = 1;
+#endif
 
+        // Enable UART0 interrupt on frame error and enable IRQ
+#ifdef HAS_KINETISK_UART1_FIFO
+        UART1_C3 |= UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE;
+#else
+        UART1_C3 |= UART_C3_FEIE | UART_C2_RIE;
+#endif
+        NVIC_ENABLE_IRQ(IRQ_UART1_STATUS);
+
+        attachInterruptVector(IRQ_UART1_STATUS, UART1RxStatus);
+
+#ifdef HAS_KINETISK_UART1_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
         NVIC_SET_PRIORITY(IRQ_UART1_ERROR,
                           NVIC_GET_PRIORITY(IRQ_UART1_STATUS) + 1);
 
-        // Enable UART1 interrupt on frame error and enable IRQ
-        UART1_C3 |= UART_C3_FEIE;
+        // Enable UART0 interrupt on frame error and enable IRQ
         NVIC_ENABLE_IRQ(IRQ_UART1_ERROR);
-
         attachInterruptVector(IRQ_UART1_ERROR, UART1RxError);
+#endif
     } else if (&m_uart == &Serial3) {
+        // Change interrupt vector to mine to monitor RX complete
         // Fire UART2 receive interrupt immediately after each byte received
+#ifdef HAS_KINETISK_UART2_FIFO
         UART2_RWFIFO = 1;
+#endif
 
+        // Enable UART2 interrupt on frame error and enable IRQ
+#ifdef HAS_KINETISK_UART2_FIFO
+        UART2_C3 |= UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE;
+#else
+        UART2_C3 |= UART_C3_FEIE | UART_C2_RIE;
+#endif
+        NVIC_ENABLE_IRQ(IRQ_UART2_STATUS);
+
+        attachInterruptVector(IRQ_UART2_STATUS, UART2RxStatus);
+
+#ifdef HAS_KINETISK_UART2_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
         NVIC_SET_PRIORITY(IRQ_UART2_ERROR,
                           NVIC_GET_PRIORITY(IRQ_UART2_STATUS) + 1);
 
-        // Enable UART2 interrupt on frame error and enable IRQ
-        UART2_C3 |= UART_C3_FEIE;
+        // Enable UART0 interrupt on frame error and enable IRQ
         NVIC_ENABLE_IRQ(IRQ_UART2_ERROR);
-
         attachInterruptVector(IRQ_UART2_ERROR, UART2RxError);
+#endif
     }
 #ifdef HAS_KINETISK_UART3
     else if (&m_uart == &Serial4) {
         // Fire UART3 receive interrupt immediately after each byte received
         UART3_RWFIFO = 1;
 
+        // Enable UART3 interrupt on frame error and enable IRQ
+#ifdef HAS_KINETISK_UART3_FIFO
+        UART3_C3 |= UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE;
+#else
+        UART3_C3 |= UART_C3_FEIE | UART_C2_RIE;
+#endif
+        NVIC_ENABLE_IRQ(IRQ_UART3_STATUS);
+
+        attachInterruptVector(IRQ_UART3_STATUS, UART3RxStatus);
+
+#ifdef HAS_KINETISK_UART3_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
         NVIC_SET_PRIORITY(IRQ_UART3_ERROR,
                           NVIC_GET_PRIORITY(IRQ_UART3_STATUS) + 1);
 
-        // Enable UART2 interrupt on frame error and enable IRQ
-        UART3_C3 |= UART_C3_FEIE;
+        // Enable UART3 interrupt on frame error and enable IRQ
         NVIC_ENABLE_IRQ(IRQ_UART3_ERROR);
 
         attachInterruptVector(IRQ_UART3_ERROR, UART3RxError);
+#endif
     }
 #endif
 #ifdef HAS_KINETISK_UART4
@@ -1159,6 +1480,17 @@ void TeensyDmx::startReceive()
         // Fire UART4 receive interrupt immediately after each byte received
         UART4_RWFIFO = 1;
 
+        // Enable UART4 interrupt on frame error and enable IRQ
+#ifdef HAS_KINETISK_UART4_FIFO
+        UART4_C3 |= UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE;
+#else
+        UART4_C3 |= UART_C3_FEIE | UART_C2_RIE;
+#endif
+        NVIC_ENABLE_IRQ(IRQ_UART4_STATUS);
+
+        attachInterruptVector(IRQ_UART4_STATUS, UART4RxStatus);
+
+#ifdef HAS_KINETISK_UART4_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
@@ -1166,10 +1498,10 @@ void TeensyDmx::startReceive()
                           NVIC_GET_PRIORITY(IRQ_UART4_STATUS) + 1);
 
         // Enable UART2 interrupt on frame error and enable IRQ
-        UART4_C3 |= UART_C3_FEIE;
         NVIC_ENABLE_IRQ(IRQ_UART4_ERROR);
 
         attachInterruptVector(IRQ_UART4_ERROR, UART4RxError);
+#endif
     }
 #endif
 #ifdef HAS_KINETISK_UART5
@@ -1177,22 +1509,31 @@ void TeensyDmx::startReceive()
         // Fire UART5 receive interrupt immediately after each byte received
         UART5_RWFIFO = 1;
 
+        // Enable UART5 interrupt on frame error and enable IRQ
+#ifdef HAS_KINETISK_UART5_FIFO
+        UART5_C3 |= UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE;
+#else
+        UART5_C3 |= UART_C3_FEIE | UART_C2_RIE;
+#endif
+        NVIC_ENABLE_IRQ(IRQ_UART5_STATUS);
+
+        attachInterruptVector(IRQ_UART5_STATUS, UART5RxStatus);
+
+#ifdef HAS_KINETISK_UART5_FIFO
         // Set error IRQ priority lower than that of the status IRQ,
         // so that the status IRQ receives any leftover bytes before
         // we detect and trigger a new frame.
         NVIC_SET_PRIORITY(IRQ_UART5_ERROR,
                           NVIC_GET_PRIORITY(IRQ_UART5_STATUS) + 1);
 
-        // Enable UART2 interrupt on frame error and enable IRQ
-        UART5_C3 |= UART_C3_FEIE;
+        // Enable UART5 interrupt on frame error and enable IRQ
         NVIC_ENABLE_IRQ(IRQ_UART5_ERROR);
 
         attachInterruptVector(IRQ_UART5_ERROR, UART5RxError);
+#endif
     }
 #endif
-#endif
 
-    m_dmxBufferIndex = 0;
     m_state = State::IDLE;
 }
 
@@ -1200,155 +1541,169 @@ void TeensyDmx::stopReceive()
 {
     m_uart.end();
 
-#ifndef IRQ_UART0_ERROR
     if (&m_uart == &Serial1) {
+#ifdef HAS_KINETISK_UART0_FIFO
         UART0_RWFIFO = 0;
-        UART0_C3 &= ~UART_C3_FEIE;
-        attachInterruptVector(IRQ_UART0_STATUS, uart0_status_isr);
-    } else if (&m_uart == &Serial2) {
-        UART1_RWFIFO = 0;
-        UART1_C3 &= ~UART_C3_FEIE;
-        attachInterruptVector(IRQ_UART1_STATUS, uart1_status_isr);
-    } else if (&m_uart == &Serial3) {
-        UART2_RWFIFO = 0;
-        UART2_C3 &= ~UART_C3_FEIE;
-        attachInterruptVector(IRQ_UART2_STATUS, uart2_status_isr);
-    }
-#else
-    if (&m_uart == &Serial1) {
-        UART0_RWFIFO = 0;
-        UART0_C3 &= ~UART_C3_FEIE;
+#endif
+#ifdef HAS_KINETISK_UART0_FIFO
         NVIC_DISABLE_IRQ(IRQ_UART0_ERROR);
         attachInterruptVector(IRQ_UART0_ERROR, uart0_error_isr);
+        UART0_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
+#else
+        UART0_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
+#endif
+        attachInterruptVector(IRQ_UART0_STATUS, uart0_status_isr);
     } else if (&m_uart == &Serial2) {
+#ifdef HAS_KINETISK_UART1_FIFO
         UART1_RWFIFO = 0;
-        UART1_C3 &= ~UART_C3_FEIE;
+#endif
+#ifdef HAS_KINETISK_UART1_FIFO
         NVIC_DISABLE_IRQ(IRQ_UART1_ERROR);
         attachInterruptVector(IRQ_UART1_ERROR, uart1_error_isr);
+        UART1_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
+#else
+        UART1_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
+#endif
+        attachInterruptVector(IRQ_UART1_STATUS, uart1_status_isr);
     } else if (&m_uart == &Serial3) {
+#ifdef HAS_KINETISK_UART2_FIFO
         UART2_RWFIFO = 0;
-        UART2_C3 &= ~UART_C3_FEIE;
+#endif
+#ifdef HAS_KINETISK_UART2_FIFO
         NVIC_DISABLE_IRQ(IRQ_UART2_ERROR);
         attachInterruptVector(IRQ_UART2_ERROR, uart2_error_isr);
+        UART2_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
+#else
+        UART2_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
+#endif
+        attachInterruptVector(IRQ_UART2_STATUS, uart2_status_isr);
     }
 #ifdef HAS_KINETISK_UART3
     else if (&m_uart == &Serial4) {
         UART3_RWFIFO = 0;
-        UART3_C3 &= ~UART_C3_FEIE;
+#ifdef HAS_KINETISK_UART3_FIFO
         NVIC_DISABLE_IRQ(IRQ_UART3_ERROR);
         attachInterruptVector(IRQ_UART3_ERROR, uart3_error_isr);
+        UART3_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
+#else
+        UART3_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
+#endif
+        attachInterruptVector(IRQ_UART3_STATUS, uart3_status_isr);
     }
 #endif
 #ifdef HAS_KINETISK_UART4
     else if (&m_uart == &Serial5) {
         UART4_RWFIFO = 0;
-        UART4_C3 &= ~UART_C3_FEIE;
+#ifdef HAS_KINETISK_UART4_FIFO
         NVIC_DISABLE_IRQ(IRQ_UART4_ERROR);
         attachInterruptVector(IRQ_UART4_ERROR, uart4_error_isr);
+        UART4_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
+#else
+        UART4_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
+#endif
+        attachInterruptVector(IRQ_UART4_STATUS, uart4_status_isr);
     }
 #endif
 #ifdef HAS_KINETISK_UART5
     else if (&m_uart == &Serial6) {
         UART5_RWFIFO = 0;
-        UART5_C3 &= ~UART_C3_FEIE;
+#ifdef HAS_KINETISK_UART5_FIFO
         NVIC_DISABLE_IRQ(IRQ_UART5_ERROR);
         attachInterruptVector(IRQ_UART5_ERROR, uart5_error_isr);
-    }
+        UART5_C3 &= ~(UART_C3_FEIE | UART_C2_RIE | UART_C2_ILIE);
+#else
+        UART5_C3 &= ~(UART_C3_FEIE | UART_C2_RIE);
 #endif
+        attachInterruptVector(IRQ_UART5_STATUS, uart5_status_isr);
+    }
 #endif
 }
 
-void TeensyDmx::readBytes()
-{
-    __disable_irq();  // Prevents conflicts with the error ISR
-
-    int available = m_uart.available();
-    while (available--)
-    {
-        switch (m_state)
-        {
-            case State::BREAK:
-                switch (m_uart.read())
-                {
-                    case 0:
-                        m_state = State::DMX_RECV;
-                        break;
-                    case E120_SC_RDM:
-                        m_dmxBufferIndex = 0;
-                        m_rdmBuffer.buffer[m_dmxBufferIndex] = E120_SC_RDM;
-                        ++m_dmxBufferIndex;
-                        m_state = State::RDM_RECV;
-                        break;
-                    default:
-                        // ASC
-                        m_state = State::IDLE;
-                        break;
-                }
-                break;
-            case State::RDM_RECV:
-                m_rdmBuffer.buffer[m_dmxBufferIndex] = m_uart.read();
-
-                if (m_dmxBufferIndex >= RDM_BUFFER_SIZE) {
-                    if (m_state == State::RDM_RECV) {
-                        m_state = State::RDM_RECV_CHECKSUM_HI;
-                    } else {
-                        m_state = State::IDLE;  // Buffer full
-                    }
-                } else if (m_dmxBufferIndex >= 2) {
-                    // Got enough data to have packet length
-                    if ((m_dmxBufferIndex + 1) >= m_rdmBuffer.packet.Length) {
-                        // Got expected packet length, need checksum
-                        m_state = State::RDM_RECV_CHECKSUM_HI;
-                    } else {
-                        if (m_rdmBuffer.packet.SubStartCode != E120_SC_SUB_MESSAGE) {
-                            m_state = State::IDLE;  // Invalid RDM packet
-                        }
-                    }
-                }
-
-                ++m_dmxBufferIndex;
-
-                break;
-            case State::RDM_RECV_CHECKSUM_HI:
-                m_rdmChecksum = (m_uart.read() << 8);
-                m_state = State::RDM_RECV_CHECKSUM_LO;
-                break;
-            case State::RDM_RECV_CHECKSUM_LO:
-                m_rdmChecksum = (m_rdmChecksum | m_uart.read());
-                if (m_rdmChecksum == rdmCalculateChecksum(m_rdmBuffer.buffer, m_rdmBuffer.packet.Length)) {
-                    m_state = State::RDM_COMPLETE;
-                } else {
-                    m_state = State::IDLE;  // Invalid RDM checksum
-                }
-                break;
-            case State::DMX_RECV:
-                m_activeBuffer[m_dmxBufferIndex] = m_uart.read();
-                ++m_dmxBufferIndex;
-
-                if (m_dmxBufferIndex >= DMX_BUFFER_SIZE) {
-                    if (m_state == State::DMX_RECV) {
-                        m_state = State::DMX_COMPLETE;
-                    } else {
-                        m_state = State::IDLE;  // Buffer full
-                    }
-                }
-                break;
-            default:
-                // Discarding bytes
-                m_uart.read();
-                break;
-        }
+inline void TeensyDmx::setDirection(bool transmit) {
+    if (m_redePin != nullptr) {
+        *m_redePin = (transmit ? 1 : 0);
     }
+}
 
-    __enable_irq();
+void TeensyDmx::handleByte(uint8_t c)
+{
+    switch (m_state)
+    {
+        case State::BREAK:
+            switch (c)
+            {
+                case 0:
+                    m_state = State::DMX_RECV;
+                    // In DMX mode we don't keep the start code
+                    m_dmxBufferIndex = 0;
+                    break;
+                case E120_SC_RDM:
+                    m_rdmNeedsProcessing = false;
+                    // Store the start code and then increment
+                    reinterpret_cast<uint8_t*>(&m_rdmBuffer)[0] = c;
+                    m_dmxBufferIndex = 1;
+                    m_state = State::RDM_RECV;
+                    break;
+                default:
+                    // ASC
+                    m_state = State::IDLE;
+                    break;
+            }
+            break;
+        case State::RDM_RECV:
+            reinterpret_cast<uint8_t*>(&m_rdmBuffer)[m_dmxBufferIndex] = c;
+            ++m_dmxBufferIndex;
+            if (m_dmxBufferIndex >= sizeof(RdmData)) {
+                m_state = State::RDM_RECV_CHECKSUM_HI;
+            } else if (m_dmxBufferIndex >= 3) {
+                // Got enough data to have packet length
+                if (m_rdmBuffer.subStartCode != E120_SC_SUB_MESSAGE) {
+                    m_state = State::IDLE;  // Invalid RDM packet
+                } else if (m_dmxBufferIndex >= m_rdmBuffer.length) {
+                    // Got expected packet length, need checksum
+                    m_state = State::RDM_RECV_CHECKSUM_HI;
+                }
+            }
+            break;
+        case State::RDM_RECV_CHECKSUM_HI:
+            m_rdmChecksum = (c << 8);
+            ++m_dmxBufferIndex;
+            m_state = State::RDM_RECV_CHECKSUM_LO;
+            break;
+        case State::RDM_RECV_CHECKSUM_LO:
+            m_rdmChecksum = (m_rdmChecksum | c);
+            ++m_dmxBufferIndex;
+            if (m_rdmChecksum ==
+                    rdmCalculateChecksum(reinterpret_cast<uint8_t*>(&m_rdmBuffer),
+                                         m_rdmBuffer.length)) {
+                m_rdmNeedsProcessing = true;
+            } else {
+                maybeIncrementChecksumFail();
+            }
+            m_state = State::RDM_RECV_POST_CHECKSUM;
+            break;
+        case State::RDM_RECV_POST_CHECKSUM:
+            maybeIncrementLengthMismatch();
+            m_state = State::IDLE;
+            break;
+        case State::DMX_RECV:
+            m_activeBuffer[m_dmxBufferIndex] = c;
+            ++m_dmxBufferIndex;
+            if (m_dmxBufferIndex >= DMX_BUFFER_SIZE) {
+                m_state = State::DMX_COMPLETE;
+            }
+            break;
+        default:
+            // Discarding bytes
+            break;
+    }
 }
 
 void TeensyDmx::loop()
 {
-    if (m_mode == DMX_IN) {
-        readBytes();
-        if (m_state == RDM_COMPLETE) {
-            processRDM();
-        }
+    if (m_rdmNeedsProcessing)
+    {
+        m_rdmNeedsProcessing = false;
+        processRDM();
     }
 }
