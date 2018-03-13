@@ -14,8 +14,8 @@ utilised by DmxSimple.
 Limited testing has been done with the hardware people have lying around
 on Serial1, on Teensy 3.2, 3.5 and LC on Arduino IDE 1.8.2.
 
-|               | Teensy-LC        | Teensy 3.0    | Teensy 3.1    | Teensy 3.2       | Teensy 3.5       | Teensy 3.6    |
-|---------------|------------------|---------------|---------------|------------------|------------------|---------------|
-| DMX Rx        |:white_check_mark:|:grey_question:|:grey_question:|:white_check_mark:|:white_check_mark:|:grey_question:|
-| DMX Tx        |:white_check_mark:|:grey_question:|:grey_question:|:white_check_mark:|:white_check_mark:|:grey_question:|
-| RDM Responder |:white_check_mark:|:grey_question:|:grey_question:|:white_check_mark:|:white_check_mark:|:grey_question:|
+|               | Teensy-LC        | Teensy 3.0| Teensy 3.1| Teensy 3.2       | Teensy 3.5       | Teensy 3.6|
+|---------------|------------------|-----------|-----------|------------------|------------------|-----------|
+| DMX Rx        |:heavy_check_mark:|:question: |:question: |:heavy_check_mark:|:heavy_check_mark:|:question: |
+| DMX Tx        |:heavy_check_mark:|:question: |:question: |:heavy_check_mark:|:heavy_check_mark:|:question: |
+| RDM Responder |:heavy_check_mark:|:question: |:question: |:heavy_check_mark:|:heavy_check_mark:|:question: |
