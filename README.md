@@ -11,7 +11,11 @@ This is the combination of DMXSerial2, DmxReceive and DmxSimple but
 converted to use the UART for Tx rather than the bit-banging method
 utilised by DmxSimple.
 
-I've done limited testing on the receive and transmit functionality
-with the hardware I have lying around.  DMX transmit, DMX receive
-and RDM responder tested working on Serial1, on Teensy 3.2, 3.5 and LC
-on Arduino IDE 1.8.2.
+Limited testing has been done with the hardware people have lying around
+on Serial1, on Teensy 3.2, 3.5 and LC on Arduino IDE 1.8.2.
+
+|               | Teensy-LC        | Teensy 3.0    | Teensy 3.1    | Teensy 3.2       | Teensy 3.5       | Teensy 3.6    |
+|---------------|------------------|---------------|---------------|------------------|------------------|---------------|
+| DMX Rx        |:white_check_mark:|:grey_question:|:grey_question:|:white_check_mark:|:white_check_mark:|:grey_question:|
+| DMX Tx        |:white_check_mark:|:grey_question:|:grey_question:|:white_check_mark:|:white_check_mark:|:grey_question:|
+| RDM Responder |:white_check_mark:|:grey_question:|:grey_question:|:white_check_mark:|:white_check_mark:|:grey_question:|
