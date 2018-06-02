@@ -1170,11 +1170,11 @@ void TeensyDmx::sendRDMDiscUniqueBranch() {
     m_controllerState = ControllerState::RDM_DUB;
     m_rdmResponseDue = millis() + RDM_DUB_TIMEOUT_DURATION;
     Serial.print("DUB started, RDM ");
-                    Serial.print(m_rdmResponseDue);
-                    Serial.print(", Disc: ");
-                    Serial.print(m_nextDiscoveryAction);
-                    Serial.print(", millis: ");
-   Serial.println(millis());
+    Serial.print(m_rdmResponseDue);
+    Serial.print(", Disc: ");
+    Serial.print(m_nextDiscoveryAction);
+    Serial.print(", millis: ");
+    Serial.println(millis());
 }
 
 
@@ -1356,7 +1356,8 @@ void TeensyDmx::sendRDMGetLampState(byte *uid) {
 
 
 void TeensyDmx::sendRDMSetLampState(byte *uid, uint8_t lamp_state) {
-    if (((lamp_state >= 0) && (lamp_state <= 3)) ||
+    if (((lamp_state >= E120_LAMP_OFF) &&
+         (lamp_state <= E120_LAMP_STANDBY)) ||
         ((lamp_state >= 128) && (lamp_state <= 223))) {
         m_rdmBuffer.data[0] = lamp_state;
         m_rdmBuffer.dataLength = 1;
@@ -1374,7 +1375,8 @@ void TeensyDmx::sendRDMGetLampOnMode(byte *uid) {
 
 
 void TeensyDmx::sendRDMSetLampOnMode(byte *uid, uint8_t mode) {
-    if (((mode >= 0) && (mode <= 3)) ||
+    if (((mode >= E120_LAMP_ON_MODE_OFF) &&
+         (mode <= E120_LAMP_ON_MODE_AFTER_CAL)) ||
         ((mode >= 128) && (mode <= 223))) {
         m_rdmBuffer.data[0] = mode;
         m_rdmBuffer.dataLength = 1;
