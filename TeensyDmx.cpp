@@ -1144,6 +1144,7 @@ void TeensyDmx::sendRDMDiscUniqueBranch(byte *lower_uid, byte *upper_uid) {
 
 // Ensure you've set the parameters if using this directly
 void TeensyDmx::sendRDMDiscUniqueBranch() {
+    /*
     DiscUniqueBranchRequest *dub_request =
         reinterpret_cast<DiscUniqueBranchRequest*>(m_rdmBuffer.data);
 
@@ -1166,6 +1167,7 @@ void TeensyDmx::sendRDMDiscUniqueBranch() {
       }
     }
     // Serial.println("");
+    */
 
     m_rdmBuffer.dataLength = sizeof(DiscUniqueBranchRequest);
 
