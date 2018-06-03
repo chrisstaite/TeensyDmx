@@ -2476,11 +2476,11 @@ void TeensyDmx::handleByte(uint8_t c)
             break;
         case State::RDM_DUB_CHECKSUM_0:
             Serial.print("DUB Check 0, RDM: ");
-                    Serial.print(m_rdmResponseDue);
-                    Serial.print(", Disc: ");
-                    Serial.print(m_nextDiscoveryAction);
-                    Serial.print(", millis: ");
-   Serial.println(millis());
+            Serial.print(m_rdmResponseDue);
+            Serial.print(", Disc: ");
+            Serial.print(m_nextDiscoveryAction);
+            Serial.print(", millis: ");
+            Serial.println(millis());
             m_rdmChecksum = ((m_rdmChecksum & 0xff00) | ((m_rdmChecksum & 0x00ff) & c));
             ++m_dmxBufferIndex;
             if (m_rdmChecksum ==
