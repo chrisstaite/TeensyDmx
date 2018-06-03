@@ -11,6 +11,10 @@ constexpr uint32_t DMXSPEED = 250000;
 constexpr uint32_t DMXFORMAT = SERIAL_8N2;
 constexpr uint16_t NACK_WAS_ACK = 0xffff;  // Send an ACK, not a NACK
 
+// RDM discovery debugging
+// Enable: sed -i -e 's/Serial\./\/\/ Serial./g' TeensyDmx.{cpp,h}
+// Disable: sed -i -e 's/\/\/ Serial\./Serial./g' TeensyDmx.{cpp,h}
+
 // The DeviceInfoGetResponse structure (length = 19) has to be responded for
 // E120_DEVICE_INFO.  See http://rdm.openlighting.org/pid/display?manufacturer=0&pid=96
 struct DeviceInfoGetResponse
@@ -227,8 +231,8 @@ TeensyDmx::TeensyDmx(HardwareSerial& uart, RdmInit* rdm) :
     m_rdmChecksum(0),
     m_deviceLabel{0}
 {
-    Serial.begin(9600);
-    Serial.println("Started TeensyDmx");
+    // Serial.begin(9600);
+    // Serial.println("Started TeensyDmx");
 
     if (&m_uart == &Serial1) {
         uartInstances[0] = this;
@@ -1019,12 +1023,12 @@ void TeensyDmx::maybeTimeoutRDMMessage() {
                       m_controllerState = ControllerState::RDM_DUB_COLLISION;
                     } else {
                       // A timed out DUB with no data becomes a timeout
-                      Serial.print("DUB timing out, RDM: ");
-                      Serial.print(m_rdmResponseDue);
-                      Serial.print(", Disc: ");
-                      Serial.print(m_nextDiscoveryAction);
-                      Serial.print(", millis: ");
-                      Serial.println(millis());
+                      // Serial.print("DUB timing out, RDM: ");
+                      // Serial.print(m_rdmResponseDue);
+                      // Serial.print(", Disc: ");
+                      // Serial.print(m_nextDiscoveryAction);
+                      // Serial.print(", millis: ");
+                      // Serial.println(millis());
                       m_controllerState = ControllerState::RDM_DUB_TIMEOUT;
                     }
                     break;
@@ -1075,14 +1079,14 @@ void TeensyDmx::maybeProgressRDMDiscovery() {
                         sendRDMDiscUniqueBranch(m_dubLowerBoundUid, m_dubUpperBoundUid);
                         // Remove the item from the queue
                         m_dubPointer--;
-                        Serial.print("DUB pointer now ");
-                        Serial.println(m_dubPointer);
+                        // Serial.print("DUB pointer now ");
+                        // Serial.println(m_dubPointer);
                         m_nextDiscoveryAction = millis() + DUB_ACTION_OFFSET;
                     }
                     break;
                 default:
-                    Serial.print("Unhandled disc state ");
-                    Serial.println(m_discoveryState);
+                    // Serial.print("Unhandled disc state ");
+                    // Serial.println(m_discoveryState);
                     // Do nothing
                     break;
             }
@@ -1094,16 +1098,16 @@ void TeensyDmx::maybeProgressRDMDiscovery() {
 void TeensyDmx::sendRDMDiscMute(byte *uid) {
     m_rdmBuffer.dataLength = 0;
 
-    Serial.print("Mute to ");
+    // Serial.print("Mute to ");
     for(int j = 0; j < RDM_UID_LENGTH; j++)
     {
-      Serial.print(uid[j], HEX);
+      // Serial.print(uid[j], HEX);
       if ((j + 1) < RDM_UID_LENGTH) {
           // Don't print a colon after the last byte
-          Serial.print(":");
+          // Serial.print(":");
       }
     }
-    Serial.println("");
+    // Serial.println("");
 
     buildSendRDMMessage(uid, E120_DISCOVERY_COMMAND, E120_DISC_MUTE);
 }
@@ -1143,25 +1147,25 @@ void TeensyDmx::sendRDMDiscUniqueBranch() {
     DiscUniqueBranchRequest *dub_request =
         reinterpret_cast<DiscUniqueBranchRequest*>(m_rdmBuffer.data);
 
-    Serial.print("DUB from ");
+    // Serial.print("DUB from ");
     for(int j = 0; j < RDM_UID_LENGTH; j++)
     {
-      Serial.print(dub_request->lowerBoundUID[j], HEX);
+      // Serial.print(dub_request->lowerBoundUID[j], HEX);
       if ((j + 1) < RDM_UID_LENGTH) {
           // Don't print a colon after the last byte
-          Serial.print(":");
+          // Serial.print(":");
       }
     }
-    Serial.print(" to ");
+    // Serial.print(" to ");
     for(int j = 0; j < RDM_UID_LENGTH; j++)
     {
-      Serial.print(dub_request->upperBoundUID[j], HEX);
+      // Serial.print(dub_request->upperBoundUID[j], HEX);
       if ((j + 1) < RDM_UID_LENGTH) {
           // Don't print a colon after the last byte
-          Serial.print(":");
+          // Serial.print(":");
       }
     }
-    Serial.println("");
+    // Serial.println("");
 
     m_rdmBuffer.dataLength = sizeof(DiscUniqueBranchRequest);
 
@@ -1169,12 +1173,12 @@ void TeensyDmx::sendRDMDiscUniqueBranch() {
     m_state = State::RDM_DUB_PRE_PREAMBLE;
     m_controllerState = ControllerState::RDM_DUB;
     m_rdmResponseDue = millis() + RDM_DUB_TIMEOUT_DURATION;
-    Serial.print("DUB started, RDM ");
-    Serial.print(m_rdmResponseDue);
-    Serial.print(", Disc: ");
-    Serial.print(m_nextDiscoveryAction);
-    Serial.print(", millis: ");
-    Serial.println(millis());
+    // Serial.print("DUB started, RDM ");
+    // Serial.print(m_rdmResponseDue);
+    // Serial.print(", Disc: ");
+    // Serial.print(m_nextDiscoveryAction);
+    // Serial.print(", millis: ");
+    // Serial.println(millis());
 }
 
 
@@ -1496,9 +1500,9 @@ void TeensyDmx::processControllerRDM()
             // Do nothing, unknown state
             break;
     }
-    //Serial.println("processControllerRDM");
-    //Serial.println(millis());
-    //Serial.println(m_rdmResponseDue);
+    //// Serial.println("processControllerRDM");
+    //// Serial.println(millis());
+    //// Serial.println(m_rdmResponseDue);
     m_controllerState = ControllerState::CONTROLLER_IDLE;
 }
 
@@ -1615,8 +1619,8 @@ void TeensyDmx::processResponderRDM()
 
 void TeensyDmx::processDiscovery()
 {
-    //Serial.print("proc disc ");
-    //Serial.println(m_controllerState);
+    //// Serial.print("proc disc ");
+    //// Serial.println(m_controllerState);
     switch (m_controllerState)
     {
         case ControllerState::RDM_DUB:
@@ -1632,16 +1636,16 @@ void TeensyDmx::processDiscovery()
                          dub_response->maskedDevID[i+i+1]);
                 }
                 m_uidCount++;
-                Serial.print("Found a UID! UID count now ");
-                Serial.println(m_uidCount);
+                // Serial.print("Found a UID! UID count now ");
+                // Serial.println(m_uidCount);
                 m_discoveryState = DiscoveryState::DISCOVERY_MUTE;
                 m_nextDiscoveryAction = millis() + DISCOVERY_ACTION_OFFSET;
             }
             break;
         case ControllerState::RDM_DUB_COLLISION:
         {
-            Serial.println("Collision");
-            //Serial.println("Doing binary search");
+            // Serial.println("Collision");
+            //// Serial.println("Doing binary search");
             //uint64_t midPosition = ((m_dubLowerBoundUid & (0x0000800000000000-1)) +
             //                         (m_dubUpperBoundUid & (0x0000800000000000-1))) / 2)
             //                       + ((m_dubUpperBoundUid & 0x0000800000000000) ? 0x0000400000000000 : 0)
@@ -1653,21 +1657,21 @@ void TeensyDmx::processDiscovery()
             m_dubQueue[(m_dubPointer * 2)] = (midPosition + 1);
             m_dubQueue[(m_dubPointer * 2) + 1] = m_dubUpperBoundUid;
             m_dubPointer++;
-            Serial.print("DUB pointer now ");
-            Serial.println(m_dubPointer);
-            Serial.println("Pausing before next DUB");
+            // Serial.print("DUB pointer now ");
+            // Serial.println(m_dubPointer);
+            // Serial.println("Pausing before next DUB");
             m_nextDiscoveryAction = millis() + DUB_ACTION_OFFSET;
-            //Serial.println(millis());
-            //Serial.println(m_nextDiscoveryAction);
+            //// Serial.println(millis());
+            //// Serial.println(m_nextDiscoveryAction);
             //m_dubUpperboundUid = MidPosition;
             break;
        }
        case ControllerState::RDM_DUB_TIMEOUT:
-            Serial.print("DUB Timeout ");
-            Serial.println(m_nextDiscoveryAction);
+            // Serial.print("DUB Timeout ");
+            // Serial.println(m_nextDiscoveryAction);
             if (m_dubPointer > 0) {
               // Keep discovering...
-              Serial.println("Pausing before next DUB");
+              // Serial.println("Pausing before next DUB");
               m_nextDiscoveryAction = millis() + DUB_ACTION_OFFSET;
             } else {
               // Nothing left to do, return the list
@@ -2420,23 +2424,23 @@ void TeensyDmx::handleByte(uint8_t c)
         case State::RDM_DUB_PRE_PREAMBLE:
             // Fall through
         case State::RDM_DUB_PREAMBLE:
-            //Serial.println("DUB preamble");
+            //// Serial.println("DUB preamble");
             if (c == 0xAA) {
-              Serial.println("DUB preamble 0xaa");
+              // Serial.println("DUB preamble 0xaa");
               // We're not interested in DUB preamble bytes, so don't store them
               // Start storing at index 8 so we can use DiscUniqueBranchResponse struct
               m_dmxBufferIndex = RDM_DUB_PREAMBLE_SIZE;
               m_state = State::RDM_DUB_RECV;
             } else if (c == 0xFE) {
-              Serial.println("DUB preamble 0xfe");
+              // Serial.println("DUB preamble 0xfe");
               // Discarding bytes
               // TODO(Peter): Check we only ever get 7 of these, this could
               // signify a collision
               // We've got at least one byte, so we're in the preamble
               m_state = State::RDM_DUB_PREAMBLE;
             } else {
-              Serial.print("DUB preamble ");
-              Serial.println(c, HEX);
+              // Serial.print("DUB preamble ");
+              // Serial.println(c, HEX);
               // Unexpected preamble byte, assume a collision
               m_controllerState = ControllerState::RDM_DUB_COLLISION;
               m_rdmNeedsProcessing = true;
@@ -2444,43 +2448,43 @@ void TeensyDmx::handleByte(uint8_t c)
             }
             break;
         case State::RDM_DUB_RECV:
-            Serial.print("DUB recv ");
-            Serial.println(c, HEX);
+            // Serial.print("DUB recv ");
+            // Serial.println(c, HEX);
             reinterpret_cast<uint8_t*>(&m_rdmBuffer)[m_dmxBufferIndex] = c;
             ++m_dmxBufferIndex;
             if (m_dmxBufferIndex >=
                 (sizeof(DiscUniqueBranchResponse) -
                  sizeof(((DiscUniqueBranchResponse *)0)->checksum))) {
                 m_state = State::RDM_DUB_CHECKSUM_3;
-                Serial.println("DUB awaiting check");
+                // Serial.println("DUB awaiting check");
             }
             break;
         case State::RDM_DUB_CHECKSUM_3:
-            Serial.println("DUB Check 3");
+            // Serial.println("DUB Check 3");
             // This checksum byte gets bitwise shifted to the correct byte in
             // RDM_DUB_CHECKSUM_1
             m_rdmChecksum = c;
             m_state = State::RDM_DUB_CHECKSUM_2;
             break;
         case State::RDM_DUB_CHECKSUM_2:
-            Serial.println("DUB Check 2");
+            // Serial.println("DUB Check 2");
             // This checksum byte gets bitwise shifted to the correct byte in
             // RDM_DUB_CHECKSUM_1
             m_rdmChecksum = m_rdmChecksum & c;
             m_state = State::RDM_DUB_CHECKSUM_1;
             break;
         case State::RDM_DUB_CHECKSUM_1:
-            Serial.println("DUB Check 1");
+            // Serial.println("DUB Check 1");
             m_rdmChecksum = ((m_rdmChecksum << 8) | c);
             m_state = State::RDM_DUB_CHECKSUM_0;
             break;
         case State::RDM_DUB_CHECKSUM_0:
-            Serial.print("DUB Check 0, RDM: ");
-            Serial.print(m_rdmResponseDue);
-            Serial.print(", Disc: ");
-            Serial.print(m_nextDiscoveryAction);
-            Serial.print(", millis: ");
-            Serial.println(millis());
+            // Serial.print("DUB Check 0, RDM: ");
+            // Serial.print(m_rdmResponseDue);
+            // Serial.print(", Disc: ");
+            // Serial.print(m_nextDiscoveryAction);
+            // Serial.print(", millis: ");
+            // Serial.println(millis());
             m_rdmChecksum = ((m_rdmChecksum & 0xff00) | ((m_rdmChecksum & 0x00ff) & c));
             ++m_dmxBufferIndex;
             if (m_rdmChecksum ==
@@ -2490,7 +2494,7 @@ void TeensyDmx::handleByte(uint8_t c)
                         sizeof(((DiscUniqueBranchResponse *)0)->maskedDevID))) {
                 m_rdmNeedsProcessing = true;
             } else {
-                Serial.println("DUB Check mismatch");
+                // Serial.println("DUB Check mismatch");
                 // Assume a checksum mismatch means a collision
                 m_controllerState = ControllerState::RDM_DUB_COLLISION;
                 m_rdmNeedsProcessing = true;
