@@ -35,6 +35,10 @@ enum { RDM_UID_LENGTH = 6 };
 enum { RDM_MAX_STRING_LENGTH = 32 };
 enum { RDM_MAX_PARAMETER_DATA_LENGTH = 231 };
 enum { RDM_ROOT_DEVICE = 0 };
+enum { RDM_MIN_LOWER_BOUND_UID = 0x0000000000000000 };
+enum { RDM_MAX_UPPER_BOUND_UID = 0x00007fffffffffff };
+
+enum CallbackStatus { CB_SUCCESS, CB_RDM_BROADCAST, CB_RDM_TIMEOUT, CB_RDM_CHECKSUM_ERROR };
 
 struct RdmData
 {
@@ -56,6 +60,10 @@ struct RdmData
 static_assert((sizeof(RdmData) == 255),
               "Invalid size for RdmData struct, is it packed?");
 
+using RdmControllerCallback = void(*)(CallbackStatus, RdmData*);
+
+using RdmDiscoveryCallback = void(*)(CallbackStatus, byte*, uint32_t);
+
 struct RdmInit
 {
     const byte *uid;
@@ -69,11 +77,15 @@ struct RdmInit
     uint16_t startAddress;
     const uint16_t additionalCommandsLength;
     const uint16_t *additionalCommands;
+    RdmDiscoveryCallback discoveryCallback;
+    RdmControllerCallback controllerCallback;
 };
 
 class TeensyDmx
 {
   public:
+    byte RDM_BROADCAST_UID[RDM_UID_LENGTH] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
     enum Mode { DMX_OFF, DMX_IN, DMX_OUT };
 
     TeensyDmx(HardwareSerial& uart, struct RdmInit* rdm, uint8_t redePin);
@@ -135,11 +147,84 @@ class TeensyDmx
         setChannels(startAddress - 1, values, length);
     }
 
+    void doRDMDiscovery();
+
+    enum { RDM_TIMEOUT_DURATION = 2000 };
+    enum { RDM_DUB_TIMEOUT_DURATION = 100 };
+
+    enum { DUB_ACTION_OFFSET = RDM_DUB_TIMEOUT_DURATION * 2 };
+    enum { DISCOVERY_ACTION_OFFSET = RDM_TIMEOUT_DURATION * 2 };
+
+    void sendRDMDiscMute(byte *uid);
+    void sendRDMDiscUnMute(byte *uid);
+    void sendRDMDiscUniqueBranch(byte *lower_uid, byte *upper_uid);
+    void sendRDMDiscUniqueBranch(uint64_t lower_uid, uint64_t upper_uid);
+    void sendRDMGetDeviceInfo(byte *uid);
+    void sendRDMGetIdentifyDevice(byte *uid);
+    void sendRDMSetIdentifyDevice(byte *uid, bool identify_state);
+    void sendRDMGetDmxStartAddress(byte *uid);
+    void sendRDMSetDmxStartAddress(byte *uid, uint16_t dmx_address);
+    void sendRDMGetDmxPersonality(byte *uid);
+    void sendRDMSetDmxPersonality(byte *uid, uint8_t personality);
+    void sendRDMGetDmxPersonalityDescription(byte *uid, uint8_t personality);
+    void sendRDMGetManufacturerLabel(byte *uid);
+    void sendRDMGetDeviceLabel(byte *uid);
+    void sendRDMGetDeviceModelDescription(byte *uid);
+    void sendRDMSetResetDevice(byte *uid, uint8_t reset_mode);
+    void sendRDMGetPanInvert(byte *uid);
+    void sendRDMSetPanInvert(byte *uid, bool invert);
+    void sendRDMGetTiltInvert(byte *uid);
+    void sendRDMSetTiltInvert(byte *uid, bool invert);
+    void sendRDMGetPanTiltSwap(byte *uid);
+    void sendRDMSetPanTiltSwap(byte *uid, bool swap);
+    void sendRDMGetFactoryDefaults(byte *uid);
+    void sendRDMSetFactoryDefaults(byte *uid);
+    void sendRDMGetLampState(byte *uid);
+    void sendRDMSetLampState(byte *uid, uint8_t lamp_state);
+    void sendRDMGetLampOnMode(byte *uid);
+    void sendRDMSetLampOnMode(byte *uid, uint8_t mode);
+    void sendRDMGetPowerOnSelfTest(byte *uid);
+    void sendRDMSetPowerOnSelfTest(byte *uid, bool power_on_self_test);
+    void sendRDMGetPerformSelftest(byte *uid);
+    void sendRDMSetPerformSelftest(byte *uid, uint8_t test_number);
+    void sendRDMGetSelfTestDescription(byte *uid, uint8_t test_number);
+    void sendRDMGetSensorDefinition(byte *uid, uint8_t sensor_number);
+    void sendRDMGetSensorValue(byte *uid, uint8_t sensor_number);
+    void sendRDMSetSensorValue(byte *uid, uint8_t sensor_number);
+    void sendRDMSetRecordSensors(byte *uid, uint8_t sensor_number);
+
   private:
     TeensyDmx(const TeensyDmx&);
     TeensyDmx& operator=(const TeensyDmx&);
 
-    enum State { IDLE, BREAK, DMX_TX, DMX_RECV, DMX_COMPLETE, RDM_RECV, RDM_RECV_CHECKSUM_HI, RDM_RECV_CHECKSUM_LO, RDM_RECV_POST_CHECKSUM };
+    enum State {
+                 // General states:
+                 IDLE,  // Waiting for data
+                 BREAK,  // In break
+                 // DMX transmit states:
+                 DMX_TX,  // In DMX transmit
+                 // DMX receive states:
+                 DMX_RECV,  // Receiving a DMX frame
+                 DMX_COMPLETE,  // DMX frame complete
+                 // RDM general receive states
+                 RDM_RECV,  // Receiving an RDM packet
+                 RDM_RECV_CHECKSUM_HI,  // RDM checksum high byte
+                 RDM_RECV_CHECKSUM_LO,  // RDM checksum low byte
+                 RDM_RECV_POST_CHECKSUM,  // Excess bytes after checksum
+                 // RDM DUB states
+                 RDM_DUB_PRE_PREAMBLE,  // Awaiting DUB preamble
+                 RDM_DUB_PREAMBLE,  // DUB preamble
+                 RDM_DUB_RECV,  // Receiving an RDM DUB packet
+                 RDM_DUB_CHECKSUM_3,  // RDM DUB checksum 3
+                 RDM_DUB_CHECKSUM_2,  // RDM DUB checksum 2
+                 RDM_DUB_CHECKSUM_1,  // RDM DUB checksum 1
+                 RDM_DUB_CHECKSUM_0,  // RDM DUB checksum 0
+                 RDM_DUB_POST_CHECKSUM  // Excess bytes after RDM checksum
+               };
+
+    enum DiscoveryState { DISCOVERY_IDLE, DISCOVERY_MUTE, DISCOVERY_UN_MUTE, DISCOVERY_DUB };
+
+    enum ControllerState { CONTROLLER_IDLE, RDM_DUB, RDM_DUB_COLLISION, RDM_DUB_TIMEOUT, RDM_BROADCAST, RDM_TIMEOUT, RDM_CHECKSUM_ERROR, RDM_MESSAGE };
 
     void startTransmit();
     void stopTransmit();
@@ -148,9 +233,17 @@ class TeensyDmx
 
     void setDirection(bool transmit);
 
+    void maybeTimeoutRDMMessage();
+    void maybeProgressRDMDiscovery();
+
     void completeFrame();  // Called at error ISR during recv
-    void processRDM();
+    void processControllerRDM();
+    void processResponderRDM();
+    void processDiscovery();
     void respondMessage(uint16_t nackReason);
+    void sendRDMDiscUniqueBranch();
+    void buildSendRDMMessage(byte *uid, uint8_t commandClass, uint16_t pid);
+    void sendRDMMessage();
     void handleByte(uint8_t c);
 
     void nextTx();
@@ -177,6 +270,7 @@ class TeensyDmx
     bool isForMe(const byte* id);
     bool isForVendor(const byte* id);
     bool isForAll(const byte* id);
+    bool isForMany(const byte* id);
 
     void maybeIncrementShortMessage();
     void maybeIncrementChecksumFail();
@@ -195,8 +289,21 @@ class TeensyDmx
     volatile uint16_t m_lengthMismatch;
     volatile bool m_newFrame;
     volatile bool m_rdmChange;
+    unsigned long m_rdmResponseDue;
     Mode m_mode;
     State m_state;
+    DiscoveryState m_discoveryState;
+    unsigned long m_nextDiscoveryAction;
+    enum { MAX_DUB_QUEUE = 30 };
+    uint64_t m_dubQueue[MAX_DUB_QUEUE * 2];
+    uint8_t m_dubPointer;
+
+    uint64_t m_dubLowerBoundUid;
+    uint64_t m_dubUpperBoundUid;
+    enum { MAX_UID_LIST = 40 };
+    uint8_t m_uidList[MAX_UID_LIST * RDM_UID_LENGTH];
+    uint8_t m_uidCount;
+    ControllerState m_controllerState;
     volatile uint8_t* m_redePin;
     bool m_rdmMute;
     bool m_identifyMode;
