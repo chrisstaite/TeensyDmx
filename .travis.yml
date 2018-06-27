@@ -86,7 +86,7 @@ before_install:
 
 install:
   - if [ -z "$TASK" ]; then pip install --upgrade platformio; fi
-  - if [ "$TASK" = "codespell" ]; then pip install --upgrade git+https://github.com/lucasdemarchi/codespell.git; fi
+  - if [ "$TASK" = "codespell" ]; then pip install --upgrade git+https://github.com/codespell-project/codespell.git; fi
 
 script:
   - bash -ex .travis-ci.sh
